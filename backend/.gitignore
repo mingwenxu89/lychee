@@ -1,0 +1,15 @@
+## Build folders
+bin/
+obj/
+
+## IDE
+.idea/
+*.user
+
+## OS
+.DS_Store
+Thumbs.db
+
+## Visual Studio
+.vs/
+*.sln.iml

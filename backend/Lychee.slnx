@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Lychee.Api/Lychee.Api.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Lychee.Api.Tests/Lychee.Api.Tests.csproj" />
+  </Folder>
+</Solution>
