@@ -40,8 +40,16 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateIssuerSigningKey = true,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.Secret))
         };
+    })
+    .AddCookie(Microsoft.AspNetCore.Identity.IdentityConstants.ExternalScheme)
+    .AddGoogle(options =>
+    {
+        options.ClientId = builder.Configuration["Authentication:Google:ClientId"]!;
+        options.ClientSecret = builder.Configuration["Authentication:Google:ClientSecret"]!;
+        options.SignInScheme = Microsoft.AspNetCore.Identity.IdentityConstants.ExternalScheme;
     });
 builder.Services.AddAuthorization();
+builder.Services.AddScoped<Lychee.Api.Auth.ExternalLoginService>();
 
 var app = builder.Build();
 

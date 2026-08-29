@@ -23,7 +23,10 @@ public class LycheeWebApplicationFactory : WebApplicationFactory<Program>
                 ["Jwt:Secret"] = "test-only-signing-key-at-least-32-bytes-long",
                 ["Jwt:Issuer"] = "lychee-test",
                 ["Jwt:Audience"] = "lychee-test-clients",
-                ["Jwt:ExpiryDays"] = "7"
+                ["Jwt:ExpiryDays"] = "7",
+                ["Authentication:Google:ClientId"] = "test-google-client-id",
+                ["Authentication:Google:ClientSecret"] = "test-google-client-secret",
+                ["FrontendBaseUrl"] = "http://localhost:3000"
             });
         });
         builder.ConfigureServices(services =>
