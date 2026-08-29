@@ -44,6 +44,9 @@ public class UserRoleSeedingTests
     public async Task Roles_AdminAndUser_ExistAfterStartupSeed()
     {
         await using var context = CreateContext();
+
+        await IdentitySeeding.SeedRolesAsync(context);
+
         var roleNames = await context.Roles.Select(r => r.Name).ToListAsync();
         Assert.Contains("Admin", roleNames);
         Assert.Contains("User", roleNames);

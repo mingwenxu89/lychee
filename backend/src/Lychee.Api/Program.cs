@@ -75,7 +75,10 @@ if (app.Environment.IsDevelopment())
     scope.ServiceProvider.GetRequiredService<LycheeDbContext>().Database.Migrate();
 }
 
-await SeedRolesAsync(app.Services);
+using (var seedScope = app.Services.CreateScope())
+{
+    await Lychee.Data.IdentitySeeding.SeedRolesAsync(seedScope.ServiceProvider.GetRequiredService<LycheeDbContext>());
+}
 
 app.UseHttpsRedirection();
 app.UseAuthentication();
@@ -83,18 +86,5 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
-
-static async Task SeedRolesAsync(IServiceProvider services)
-{
-    using var scope = services.CreateScope();
-    var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole<Guid>>>();
-    foreach (var roleName in new[] { "Admin", "User" })
-    {
-        if (!await roleManager.RoleExistsAsync(roleName))
-        {
-            await roleManager.CreateAsync(new IdentityRole<Guid>(roleName));
-        }
-    }
-}
 
 public partial class Program { }
