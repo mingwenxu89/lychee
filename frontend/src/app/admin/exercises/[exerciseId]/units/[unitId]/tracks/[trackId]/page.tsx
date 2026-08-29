@@ -9,6 +9,7 @@ export default function TrackProofreadingPage() {
   const { trackId } = useParams<{ trackId: string }>()
   const [sentences, setSentences] = useState<Sentence[]>([])
   const [savingId, setSavingId] = useState<string | null>(null)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   async function loadSentences() {
     const response = await fetch(`/api/admin/tracks/${trackId}/sentences`)
@@ -27,17 +28,28 @@ export default function TrackProofreadingPage() {
 
   async function saveSentence(sentence: Sentence) {
     setSavingId(sentence.id)
-    await fetch(`/api/admin/sentences/${sentence.id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: sentence.text, startTime: sentence.startTime, endTime: sentence.endTime })
-    })
-    setSavingId(null)
+    setSaveError(null)
+    try {
+      const response = await fetch(`/api/admin/sentences/${sentence.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: sentence.text, startTime: sentence.startTime, endTime: sentence.endTime })
+      })
+      if (!response.ok) {
+        setSaveError(`Failed to save sentence ${sentence.index}`)
+        return
+      }
+      const saved: Sentence = await response.json()
+      setSentences((current) => current.map((s) => (s.id === saved.id ? saved : s)))
+    } finally {
+      setSavingId(null)
+    }
   }
 
   return (
     <main>
       <h1>Proofread Sentences</h1>
+      {saveError && <p role="alert" style={{ color: 'var(--error)' }}>{saveError}</p>}
       <table style={{ borderCollapse: 'collapse', width: '100%' }}>
         <thead>
           <tr>

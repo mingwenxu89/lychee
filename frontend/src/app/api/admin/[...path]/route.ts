@@ -10,7 +10,7 @@ async function proxy(request: NextRequest, path: string[]): Promise<NextResponse
     return NextResponse.json({ message: 'Not authenticated' }, { status: 401 })
   }
 
-  const backendPath = `/api/admin/${path.join('/')}`
+  const backendPath = `/api/admin/${path.join('/')}${request.nextUrl.search}`
   const isBodyMethod = request.method !== 'GET' && request.method !== 'DELETE'
   const contentType = request.headers.get('content-type') ?? ''
 
@@ -25,11 +25,20 @@ async function proxy(request: NextRequest, path: string[]): Promise<NextResponse
   }
 
   const backendResponse = await authenticatedFetch(backendPath, token, init)
+
+  if (isNullBodyStatus(backendResponse.status)) {
+    return new NextResponse(null, { status: backendResponse.status })
+  }
+
   const responseBody = await backendResponse.text()
   return new NextResponse(responseBody, {
     status: backendResponse.status,
     headers: { 'Content-Type': backendResponse.headers.get('content-type') ?? 'application/json' }
   })
+}
+
+export function isNullBodyStatus(status: number): boolean {
+  return status === 204 || status === 205 || status === 304
 }
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
