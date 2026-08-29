@@ -90,6 +90,52 @@ namespace Lychee.Data.Migrations
                     b.ToTable("AspNetUsers", (string)null);
                 });
 
+            modelBuilder.Entity("Lychee.Data.Entities.DailyPracticeLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date");
+
+                    b.Property<int>("PracticeType")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("SentenceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SentenceId");
+
+                    b.HasIndex("UserId", "Date", "SentenceId", "PracticeType")
+                        .IsUnique();
+
+                    b.ToTable("DailyPracticeLogs");
+                });
+
+            modelBuilder.Entity("Lychee.Data.Entities.EncouragementQuote", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("EncouragementQuotes");
+                });
+
             modelBuilder.Entity("Lychee.Data.Entities.Exercise", b =>
                 {
                     b.Property<Guid>("Id")
@@ -113,6 +159,117 @@ namespace Lychee.Data.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("Exercises");
+                });
+
+            modelBuilder.Entity("Lychee.Data.Entities.PracticeRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<double>("AccuracyScore")
+                        .HasColumnType("double precision");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DiffDetail")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<bool>("IsCorrect")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("SentenceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("SubmittedText")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SentenceId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("PracticeRecords");
+                });
+
+            modelBuilder.Entity("Lychee.Data.Entities.PracticeSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("CurrentSentenceIndex")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("TrackId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TrackId");
+
+                    b.HasIndex("UserId", "TrackId")
+                        .IsUnique();
+
+                    b.ToTable("PracticeSessions");
+                });
+
+            modelBuilder.Entity("Lychee.Data.Entities.RecitationAttempt", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DiffDetail")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.PrimitiveCollection<string>("QualifiedSentenceIds")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<double>("Score")
+                        .HasColumnType("double precision");
+
+                    b.Property<string>("SubmittedText")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("TrackId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TrackId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("RecitationAttempts");
                 });
 
             modelBuilder.Entity("Lychee.Data.Entities.Sentence", b =>
@@ -144,6 +301,24 @@ namespace Lychee.Data.Migrations
                     b.ToTable("Sentences");
                 });
 
+            modelBuilder.Entity("Lychee.Data.Entities.SentenceFavorite", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("SentenceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("UserId", "SentenceId");
+
+                    b.HasIndex("SentenceId");
+
+                    b.ToTable("SentenceFavorites");
+                });
+
             modelBuilder.Entity("Lychee.Data.Entities.Track", b =>
                 {
                     b.Property<Guid>("Id")
@@ -173,6 +348,24 @@ namespace Lychee.Data.Migrations
                     b.HasIndex("UnitId");
 
                     b.ToTable("Tracks");
+                });
+
+            modelBuilder.Entity("Lychee.Data.Entities.TrackFavorite", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TrackId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("UserId", "TrackId");
+
+                    b.HasIndex("TrackId");
+
+                    b.ToTable("TrackFavorites");
                 });
 
             modelBuilder.Entity("Lychee.Data.Entities.Unit", b =>
@@ -328,6 +521,82 @@ namespace Lychee.Data.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("Lychee.Data.Entities.DailyPracticeLog", b =>
+                {
+                    b.HasOne("Lychee.Data.Entities.Sentence", "Sentence")
+                        .WithMany()
+                        .HasForeignKey("SentenceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Lychee.Data.Entities.ApplicationUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Sentence");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Lychee.Data.Entities.PracticeRecord", b =>
+                {
+                    b.HasOne("Lychee.Data.Entities.Sentence", "Sentence")
+                        .WithMany()
+                        .HasForeignKey("SentenceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Lychee.Data.Entities.ApplicationUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Sentence");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Lychee.Data.Entities.PracticeSession", b =>
+                {
+                    b.HasOne("Lychee.Data.Entities.Track", "Track")
+                        .WithMany()
+                        .HasForeignKey("TrackId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Lychee.Data.Entities.ApplicationUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Track");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Lychee.Data.Entities.RecitationAttempt", b =>
+                {
+                    b.HasOne("Lychee.Data.Entities.Track", "Track")
+                        .WithMany()
+                        .HasForeignKey("TrackId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Lychee.Data.Entities.ApplicationUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Track");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("Lychee.Data.Entities.Sentence", b =>
                 {
                     b.HasOne("Lychee.Data.Entities.Track", "Track")
@@ -339,6 +608,25 @@ namespace Lychee.Data.Migrations
                     b.Navigation("Track");
                 });
 
+            modelBuilder.Entity("Lychee.Data.Entities.SentenceFavorite", b =>
+                {
+                    b.HasOne("Lychee.Data.Entities.Sentence", "Sentence")
+                        .WithMany()
+                        .HasForeignKey("SentenceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Lychee.Data.Entities.ApplicationUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Sentence");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("Lychee.Data.Entities.Track", b =>
                 {
                     b.HasOne("Lychee.Data.Entities.Unit", "Unit")
@@ -348,6 +636,25 @@ namespace Lychee.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Unit");
+                });
+
+            modelBuilder.Entity("Lychee.Data.Entities.TrackFavorite", b =>
+                {
+                    b.HasOne("Lychee.Data.Entities.Track", "Track")
+                        .WithMany()
+                        .HasForeignKey("TrackId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Lychee.Data.Entities.ApplicationUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Track");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("Lychee.Data.Entities.Unit", b =>
