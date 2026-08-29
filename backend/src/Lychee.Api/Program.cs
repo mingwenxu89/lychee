@@ -29,10 +29,13 @@ builder.Services
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection("Jwt"));
 builder.Services.AddSingleton<IJwtTokenService, JwtTokenService>();
 
-var jwtOptions = builder.Configuration.GetSection("Jwt").Get<JwtOptions>()!;
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
+        // Read configuration lazily (not into a variable captured before builder.Build())
+        // so this picks up any configuration overrides applied at host-build time, e.g.
+        // WebApplicationFactory's ConfigureAppConfiguration in tests.
+        var jwtOptions = builder.Configuration.GetSection("Jwt").Get<JwtOptions>()!;
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
@@ -78,6 +81,15 @@ if (app.Environment.IsDevelopment())
 using (var seedScope = app.Services.CreateScope())
 {
     await Lychee.Data.IdentitySeeding.SeedRolesAsync(seedScope.ServiceProvider.GetRequiredService<LycheeDbContext>());
+}
+
+if (app.Environment.IsDevelopment())
+{
+    using var adminSeedScope = app.Services.CreateScope();
+    var userManager = adminSeedScope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+    var adminEmail = builder.Configuration["Admin:Email"]!;
+    var adminPassword = builder.Configuration["Admin:Password"]!;
+    await Lychee.Data.IdentitySeeding.SeedDefaultAdminAsync(userManager, adminEmail, adminPassword);
 }
 
 app.UseHttpsRedirection();

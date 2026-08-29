@@ -1,7 +1,9 @@
+using System.Security.Claims;
 using Lychee.Api.Auth;
 using Lychee.Data.Entities;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Google;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 
@@ -89,5 +91,21 @@ public class AuthController : ControllerBase
 
         var frontendBaseUrl = _configuration["FrontendBaseUrl"]!;
         return Redirect($"{frontendBaseUrl}/auth/callback?token={Uri.EscapeDataString(token)}");
+    }
+
+    [HttpGet("me")]
+    [Authorize]
+    public IActionResult Me()
+    {
+        // .NET's JWT bearer handler may or may not remap "sub"/"email" to their
+        // ClaimTypes.* equivalents depending on handler configuration — check both
+        // so this endpoint doesn't silently break if that default ever changes.
+        var id = User.FindFirstValue(ClaimTypes.NameIdentifier)
+            ?? User.FindFirstValue(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub);
+        var email = User.FindFirstValue(ClaimTypes.Email)
+            ?? User.FindFirstValue(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Email);
+        var roles = User.FindAll(ClaimTypes.Role).Select(c => c.Value).ToArray();
+
+        return Ok(new { id, email, roles });
     }
 }

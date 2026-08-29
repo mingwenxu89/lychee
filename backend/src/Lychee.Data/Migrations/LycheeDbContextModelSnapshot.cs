@@ -152,6 +152,11 @@ namespace Lychee.Data.Migrations
                     b.Property<string>("Description")
                         .HasColumnType("text");
 
+                    b.Property<bool>("IsPublished")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasColumnType("text");
@@ -332,6 +337,11 @@ namespace Lychee.Data.Migrations
                     b.Property<TimeSpan>("Duration")
                         .HasColumnType("interval");
 
+                    b.Property<bool>("IsPublished")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
                     b.Property<string>("Level")
                         .IsRequired()
                         .HasColumnType("text");
@@ -376,6 +386,11 @@ namespace Lychee.Data.Migrations
 
                     b.Property<Guid>("ExerciseId")
                         .HasColumnType("uuid");
+
+                    b.Property<bool>("IsPublished")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
 
                     b.Property<int>("Order")
                         .HasColumnType("integer");

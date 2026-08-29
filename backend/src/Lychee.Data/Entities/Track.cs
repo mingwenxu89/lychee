@@ -9,5 +9,6 @@ public class Track
     public string SrtFileUrl { get; set; } = null!;
     public TimeSpan Duration { get; set; }
     public string Level { get; set; } = null!;
+    public bool IsPublished { get; set; } = true;
     public List<Sentence> Sentences { get; set; } = new();
 }

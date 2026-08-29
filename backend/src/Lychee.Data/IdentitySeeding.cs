@@ -1,3 +1,4 @@
+using Lychee.Data.Entities;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -19,5 +20,35 @@ public static class IdentitySeeding
             }
         }
         await context.SaveChangesAsync(ct);
+    }
+
+    public static async Task SeedDefaultAdminAsync(UserManager<ApplicationUser> userManager, string email, string password)
+    {
+        var existing = await userManager.FindByEmailAsync(email);
+        if (existing is not null)
+        {
+            if (!await userManager.IsInRoleAsync(existing, "Admin"))
+            {
+                await userManager.AddToRoleAsync(existing, "Admin");
+            }
+            return;
+        }
+
+        var admin = new ApplicationUser
+        {
+            Id = Guid.NewGuid(),
+            UserName = email,
+            Email = email,
+            EmailConfirmed = true
+        };
+
+        var result = await userManager.CreateAsync(admin, password);
+        if (!result.Succeeded)
+        {
+            throw new InvalidOperationException(
+                "Failed to seed default admin user: " + string.Join(", ", result.Errors.Select(e => e.Description)));
+        }
+
+        await userManager.AddToRoleAsync(admin, "Admin");
     }
 }

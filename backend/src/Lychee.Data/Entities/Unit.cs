@@ -7,5 +7,6 @@ public class Unit
     public Exercise Exercise { get; set; } = null!;
     public string Title { get; set; } = null!;
     public int Order { get; set; }
+    public bool IsPublished { get; set; } = true;
     public List<Track> Tracks { get; set; } = new();
 }
