@@ -19,5 +19,23 @@ services:
     ports:
       - "5433:5432"
 
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "5000:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: "Development"
+      ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=lychee_dev;Username=lychee;Password=lychee_dev_password"
+      Jwt__Secret: "REPLACE_WITH_A_LOCAL_DEV_ONLY_SECRET_AT_LEAST_32_BYTES"
+      Jwt__Issuer: "lychee-dev"
+      Jwt__Audience: "lychee-dev-clients"
+      FrontendBaseUrl: "http://localhost:3000"
+      Storage__Provider: "Local"
+      Storage__LocalBaseUrl: "http://localhost:5000/local-blobs"
+    depends_on:
+      - postgres
+
 volumes:
   pgdata:
