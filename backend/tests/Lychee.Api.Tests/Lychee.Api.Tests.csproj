@@ -24,6 +24,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Lychee.Api\Lychee.Api.csproj" />
     <ProjectReference Include="..\..\src\Lychee.Data\Lychee.Data.csproj" />
+    <ProjectReference Include="..\..\src\Lychee.Storage\Lychee.Storage.csproj" />
   </ItemGroup>
 
 </Project>

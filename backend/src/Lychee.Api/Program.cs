@@ -1,5 +1,6 @@
 using System.Text;
 using Lychee.Api.Auth;
+using Lychee.Api.Extensions;
 using Lychee.Data;
 using Lychee.Data.Entities;
 using Lychee.Storage;
@@ -53,8 +54,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 builder.Services.AddAuthorization();
 builder.Services.AddScoped<Lychee.Api.Auth.ExternalLoginService>();
 
-builder.Services.Configure<StorageOptions>(builder.Configuration.GetSection("Storage"));
-builder.Services.AddSingleton<IBlobStorageService, LocalFileBlobStorageService>();
+builder.Services.AddLycheeStorage(builder.Configuration);
 
 var app = builder.Build();
 
