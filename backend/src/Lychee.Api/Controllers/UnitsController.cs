@@ -9,6 +9,7 @@ namespace Lychee.Api.Controllers;
 public record CreateUnitRequest(string Title, int Order);
 public record UpdateUnitRequest(string Title, int Order);
 public record UnitResponse(Guid Id, Guid ExerciseId, string Title, int Order, bool IsPublished);
+// UpdatePublishStatusRequest is defined in ExercisesController.cs and shared (same namespace).
 
 [ApiController]
 [Authorize(Roles = "Admin")]
@@ -77,5 +78,16 @@ public class UnitsController : ControllerBase
         _db.Units.Remove(unit);
         await _db.SaveChangesAsync();
         return NoContent();
+    }
+
+    [HttpPatch("api/admin/units/{id}/publish-status")]
+    public async Task<IActionResult> SetPublishStatus(Guid id, UpdatePublishStatusRequest request)
+    {
+        var unit = await _db.Units.FindAsync(id);
+        if (unit is null) return NotFound();
+
+        unit.IsPublished = request.IsPublished;
+        await _db.SaveChangesAsync();
+        return Ok(ToResponse(unit));
     }
 }

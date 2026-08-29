@@ -9,6 +9,7 @@ namespace Lychee.Api.Controllers;
 public record CreateExerciseRequest(string Title, string? Description, string? CoverImageUrl, string Category);
 public record UpdateExerciseRequest(string Title, string? Description, string? CoverImageUrl, string Category);
 public record ExerciseResponse(Guid Id, string Title, string? Description, string? CoverImageUrl, string Category, bool IsPublished);
+public record UpdatePublishStatusRequest(bool IsPublished);
 
 [ApiController]
 [Route("api/admin/exercises")]
@@ -75,5 +76,16 @@ public class ExercisesController : ControllerBase
         _db.Exercises.Remove(exercise);
         await _db.SaveChangesAsync();
         return NoContent();
+    }
+
+    [HttpPatch("{id}/publish-status")]
+    public async Task<IActionResult> SetPublishStatus(Guid id, UpdatePublishStatusRequest request)
+    {
+        var exercise = await _db.Exercises.FindAsync(id);
+        if (exercise is null) return NotFound();
+
+        exercise.IsPublished = request.IsPublished;
+        await _db.SaveChangesAsync();
+        return Ok(ToResponse(exercise));
     }
 }

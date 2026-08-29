@@ -18,6 +18,7 @@ public class CreateTrackRequest
 public record TrackResponse(Guid Id, Guid UnitId, string AudioUrl, string SrtUrl, TimeSpan Duration, string Level, bool IsPublished, int SentenceCount);
 
 public record UpdateTrackRequest(string Level);
+// UpdatePublishStatusRequest is defined in ExercisesController.cs and shared (same namespace).
 
 [ApiController]
 [Authorize(Roles = "Admin")]
@@ -131,5 +132,16 @@ public class TracksController : ControllerBase
         _db.Tracks.Remove(track);
         await _db.SaveChangesAsync();
         return NoContent();
+    }
+
+    [HttpPatch("api/admin/tracks/{id}/publish-status")]
+    public async Task<IActionResult> SetPublishStatus(Guid id, UpdatePublishStatusRequest request)
+    {
+        var track = await _db.Tracks.Include(t => t.Sentences).FirstOrDefaultAsync(t => t.Id == id);
+        if (track is null) return NotFound();
+
+        track.IsPublished = request.IsPublished;
+        await _db.SaveChangesAsync();
+        return Ok(await ToResponseAsync(track, track.Sentences.Count));
     }
 }
