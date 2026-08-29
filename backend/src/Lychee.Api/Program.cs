@@ -2,9 +2,11 @@ using System.Text;
 using Lychee.Api.Auth;
 using Lychee.Data;
 using Lychee.Data.Entities;
+using Lychee.Storage;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -51,7 +53,21 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 builder.Services.AddAuthorization();
 builder.Services.AddScoped<Lychee.Api.Auth.ExternalLoginService>();
 
+builder.Services.Configure<StorageOptions>(builder.Configuration.GetSection("Storage"));
+builder.Services.AddSingleton<IBlobStorageService, LocalFileBlobStorageService>();
+
 var app = builder.Build();
+
+var storageOptions = builder.Configuration.GetSection("Storage").Get<StorageOptions>() ?? new StorageOptions();
+var localBlobRoot = Path.IsPathRooted(storageOptions.LocalRootPath)
+    ? storageOptions.LocalRootPath
+    : Path.Combine(builder.Environment.ContentRootPath, storageOptions.LocalRootPath);
+Directory.CreateDirectory(localBlobRoot);
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new PhysicalFileProvider(localBlobRoot),
+    RequestPath = "/local-blobs"
+});
 
 if (app.Environment.IsDevelopment())
 {

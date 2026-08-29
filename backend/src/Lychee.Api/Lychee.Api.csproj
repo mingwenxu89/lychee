@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Lychee.Data\Lychee.Data.csproj" />
+    <ProjectReference Include="..\Lychee.Storage\Lychee.Storage.csproj" />
   </ItemGroup>
 
   <ItemGroup>

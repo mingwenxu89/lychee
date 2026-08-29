@@ -2,9 +2,11 @@
   <Folder Name="/src/">
     <Project Path="src/Lychee.Api/Lychee.Api.csproj" />
     <Project Path="src/Lychee.Data/Lychee.Data.csproj" />
+    <Project Path="src/Lychee.Storage/Lychee.Storage.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Lychee.Api.Tests/Lychee.Api.Tests.csproj" />
     <Project Path="tests/Lychee.Data.Tests/Lychee.Data.Tests.csproj" />
+    <Project Path="tests/Lychee.Storage.Tests/Lychee.Storage.Tests.csproj" />
   </Folder>
 </Solution>
