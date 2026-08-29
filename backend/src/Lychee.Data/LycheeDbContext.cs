@@ -1,9 +1,11 @@
 using Lychee.Data.Entities;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
 namespace Lychee.Data;
 
-public class LycheeDbContext : DbContext
+public class LycheeDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid>, Guid>
 {
     public LycheeDbContext(DbContextOptions<LycheeDbContext> options) : base(options) { }
 
@@ -14,6 +16,8 @@ public class LycheeDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        base.OnModelCreating(modelBuilder);
+
         modelBuilder.Entity<Exercise>()
             .HasMany(e => e.Units)
             .WithOne(u => u.Exercise)
