@@ -1,0 +1,29 @@
+:root {
+  --bg: oklch(97% 0.015 80);
+  --surface: oklch(99% 0.004 80);
+  --ink: oklch(22% 0.03 270);
+  --ink-soft: oklch(48% 0.02 270);
+  --ink-faint: oklch(70% 0.01 270);
+  --primary: oklch(62% 0.19 25);
+  --primary-dark: oklch(50% 0.18 25);
+  --primary-soft: oklch(94% 0.035 25);
+  --leaf: oklch(62% 0.13 145);
+  --leaf-dark: oklch(45% 0.12 145);
+  --leaf-soft: oklch(94% 0.045 145);
+  --error: oklch(56% 0.20 18);
+  --gold: oklch(78% 0.14 75);
+  --line: oklch(90% 0.01 80);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  font-family: 'Nunito', system-ui, -apple-system, sans-serif;
+  color: var(--ink);
+}
+
+h1, h2, h3, .display {
+  font-family: 'Fredoka', ui-rounded, system-ui, sans-serif;
+}
