@@ -33,3 +33,13 @@ export async function loginUser(email: string, password: string): Promise<{ toke
   }
   return response.json()
 }
+
+export async function authenticatedFetch(path: string, token: string, init?: RequestInit): Promise<Response> {
+  return fetch(`${BACKEND_API_URL}${path}`, {
+    ...init,
+    headers: {
+      ...(init?.headers ?? {}),
+      Authorization: `Bearer ${token}`
+    }
+  })
+}
