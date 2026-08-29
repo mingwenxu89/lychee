@@ -2,6 +2,9 @@
 bin/
 obj/
 
+## Local dev blob storage (LocalFileBlobStorageService's on-disk root)
+local-blobs/
+
 ## IDE
 .idea/
 *.user
