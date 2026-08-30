@@ -41,7 +41,10 @@ public class LearnerHistoryControllerTests : IClassFixture<LycheeWebApplicationF
         return await TestTokens.ForRoleAsync(jwtTokenService, db, "User");
     }
 
-    private async Task<Guid> CreateTrackWithTwoSentencesAsync(HttpClient admin)
+    private async Task<Guid> CreateTrackWithTwoSentencesAsync(HttpClient admin) =>
+        (await CreateExerciseWithTrackWithTwoSentencesAsync(admin)).TrackId;
+
+    private async Task<(Guid ExerciseId, Guid TrackId)> CreateExerciseWithTrackWithTwoSentencesAsync(HttpClient admin)
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         var exerciseResponse = await admin.PostAsJsonAsync("/api/admin/exercises",
@@ -61,7 +64,7 @@ public class LearnerHistoryControllerTests : IClassFixture<LycheeWebApplicationF
         form.Add(new StringContent("The First Snowfall"), "Title");
         var trackResponse = await admin.PostAsync($"/api/admin/units/{unit!.Id}/tracks", form);
         var track = await trackResponse.Content.ReadFromJsonAsync<IdOnly>();
-        return track!.Id;
+        return (exercise.Id, track!.Id);
     }
 
     private record IdOnly(Guid Id);
@@ -134,6 +137,28 @@ public class LearnerHistoryControllerTests : IClassFixture<LycheeWebApplicationF
         Assert.Equal(1.0, entry.Accuracy);
         Assert.Null(entry.CurrentSentenceIndex);
         Assert.Null(entry.TotalSentences);
+    }
+
+    [Fact]
+    public async Task List_ExcludesEntryWhenExerciseIsUnpublished()
+    {
+        var admin = AdminClient();
+        var (exerciseId, trackId) = await CreateExerciseWithTrackWithTwoSentencesAsync(admin);
+        var learner = await LearnerClientAsync();
+        await learner.PostAsync($"/api/learner/tracks/{trackId}/practice-session/start", null);
+        await learner.PostAsJsonAsync($"/api/learner/tracks/{trackId}/recitation-attempts",
+            new { submittedText = "First sentence Second sentence" });
+
+        var beforeResponse = await learner.GetAsync("/api/learner/history");
+        var beforeEntries = await beforeResponse.Content.ReadFromJsonAsync<List<HistoryEntryResponse>>();
+        Assert.Contains(beforeEntries!, e => e.TrackId == trackId && e.PracticeType == "Practice");
+        Assert.Contains(beforeEntries!, e => e.TrackId == trackId && e.PracticeType == "Recitation");
+
+        await admin.PatchAsJsonAsync($"/api/admin/exercises/{exerciseId}/publish-status", new { isPublished = false });
+
+        var afterResponse = await learner.GetAsync("/api/learner/history");
+        var afterEntries = await afterResponse.Content.ReadFromJsonAsync<List<HistoryEntryResponse>>();
+        Assert.DoesNotContain(afterEntries!, e => e.TrackId == trackId);
     }
 
     [Fact]

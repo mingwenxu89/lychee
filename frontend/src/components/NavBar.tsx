@@ -40,13 +40,23 @@ export function NavBar({ rankLabel, activityDays, userInitial }: NavBarProps) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 36, fontWeight: 800, fontSize: 15 }}>
         {NAV_ITEMS.map((item) => {
           const isActive = item.href === pathname
+          const linkStyle: React.CSSProperties = { color: isActive ? 'var(--primary-dark)' : 'var(--ink-soft)', textDecoration: 'none' }
+
+          // Favorites (spec §7) isn't built yet, so it's shown but not clickable.
+          if (item.href === '/favorites') {
+            return (
+              <span
+                key={item.href}
+                aria-current={isActive ? 'page' : undefined}
+                style={{ ...linkStyle, opacity: 0.5, cursor: 'default' }}
+              >
+                {item.label}
+              </span>
+            )
+          }
+
           return (
-            <Link
-              key={item.href}
-              href={item.href}
-              aria-current={isActive ? 'page' : undefined}
-              style={{ color: isActive ? 'var(--primary-dark)' : 'var(--ink-soft)', textDecoration: 'none' }}
-            >
+            <Link key={item.href} href={item.href} aria-current={isActive ? 'page' : undefined} style={linkStyle}>
               {item.label}
             </Link>
           )

@@ -65,6 +65,34 @@ public class LearnerExercisesControllerTests : IClassFixture<LycheeWebApplicatio
         return (exercise.Id, track!.Id);
     }
 
+    private async Task<(Guid ExerciseId, Guid UnitId)> CreatePublishedExerciseWithUnitAsync(HttpClient admin)
+    {
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        var exerciseResponse = await admin.PostAsJsonAsync("/api/admin/exercises",
+            new { title = $"Exercise {suffix}", description = (string?)null, coverImageUrl = (string?)null, category = "Short Stories" });
+        var exercise = await exerciseResponse.Content.ReadFromJsonAsync<IdOnly>();
+
+        var unitResponse = await admin.PostAsJsonAsync($"/api/admin/exercises/{exercise!.Id}/units",
+            new { title = "Unit 1", order = 1 });
+        var unit = await unitResponse.Content.ReadFromJsonAsync<IdOnly>();
+
+        return (exercise.Id, unit!.Id);
+    }
+
+    private async Task<Guid> AddTrackAsync(HttpClient admin, Guid unitId, string title, string level = "A1")
+    {
+        using var form = new MultipartFormDataContent();
+        var audioContent = new ByteArrayContent(Encoding.UTF8.GetBytes("fake-audio"));
+        audioContent.Headers.ContentType = new MediaTypeHeaderValue("audio/mpeg");
+        form.Add(audioContent, "AudioFile", "track.mp3");
+        form.Add(new StringContent("1\n00:00:00,000 --> 00:00:01,000\nHi.\n"), "SrtFile", "track.srt");
+        form.Add(new StringContent(level), "Level");
+        form.Add(new StringContent(title), "Title");
+        var trackResponse = await admin.PostAsync($"/api/admin/units/{unitId}/tracks", form);
+        var track = await trackResponse.Content.ReadFromJsonAsync<IdOnly>();
+        return track!.Id;
+    }
+
     private record IdOnly(Guid Id);
 
     [Fact]
@@ -132,6 +160,24 @@ public class LearnerExercisesControllerTests : IClassFixture<LycheeWebApplicatio
         Assert.Single(detail.Units[0].Tracks);
         Assert.Equal("Track One", detail.Units[0].Tracks[0].Title);
         Assert.False(detail.Units[0].Tracks[0].IsCompletedByUser);
+    }
+
+    [Fact]
+    public async Task Get_ReturnsTracksWithinUnitInCreationOrder()
+    {
+        var admin = AdminClient();
+        var (exerciseId, unitId) = await CreatePublishedExerciseWithUnitAsync(admin);
+        var firstTrackId = await AddTrackAsync(admin, unitId, "First Track");
+        var secondTrackId = await AddTrackAsync(admin, unitId, "Second Track");
+        var thirdTrackId = await AddTrackAsync(admin, unitId, "Third Track");
+
+        var response = await (await LearnerClientAsync()).GetAsync($"/api/learner/exercises/{exerciseId}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var detail = await response.Content.ReadFromJsonAsync<LearnerExerciseDetailResponse>();
+        var tracks = detail!.Units.Single().Tracks;
+        Assert.Equal(new[] { firstTrackId, secondTrackId, thirdTrackId }, tracks.Select(t => t.Id));
+        Assert.Equal(new[] { "First Track", "Second Track", "Third Track" }, tracks.Select(t => t.Title));
     }
 
     [Fact]

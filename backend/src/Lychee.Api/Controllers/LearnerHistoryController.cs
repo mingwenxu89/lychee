@@ -27,13 +27,15 @@ public class LearnerHistoryController : ControllerBase
         var userId = User.GetUserId();
 
         var sessions = await _db.PracticeSessions
-            .Where(s => s.UserId == userId)
+            .Where(s => s.UserId == userId
+                && s.Track.IsPublished && s.Track.Unit.IsPublished && s.Track.Unit.Exercise.IsPublished)
             .Include(s => s.Track).ThenInclude(t => t.Unit).ThenInclude(u => u.Exercise)
             .Include(s => s.Track).ThenInclude(t => t.Sentences)
             .ToListAsync();
 
         var attempts = await _db.RecitationAttempts
-            .Where(a => a.UserId == userId)
+            .Where(a => a.UserId == userId
+                && a.Track.IsPublished && a.Track.Unit.IsPublished && a.Track.Unit.Exercise.IsPublished)
             .Include(a => a.Track).ThenInclude(t => t.Unit).ThenInclude(u => u.Exercise)
             .ToListAsync();
 

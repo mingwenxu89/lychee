@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import ExercisesPage from './page'
 
@@ -37,11 +37,15 @@ describe('ExercisesPage', () => {
 
     // After filtering by TED Talks, only TED Talks exercises should appear in the grid
     // (the ribbon still shows all recently practiced, but we verify the grid is filtered)
+    const grid = screen.getByTestId('exercise-grid')
     await waitFor(() => {
-      const tedTalksH3 = screen.queryAllByText('TED Talks').find(el => el.tagName === 'H3')
-      expect(tedTalksH3).toBeInTheDocument()
+      expect(within(grid).getByText('TED Talks')).toBeInTheDocument()
     })
-    expect(screen.getByText(/5 lessons/i)).toBeInTheDocument()
+    expect(within(grid).getByText(/5 lessons/i)).toBeInTheDocument()
+    // Short Stories has trackCount 10 and a non-null lastPracticedAt, so it still
+    // appears in the ribbon, but must be gone from the filtered grid.
+    expect(within(grid).queryByText('Short Stories')).not.toBeInTheDocument()
+    expect(screen.getAllByText('Short Stories').length).toBeGreaterThanOrEqual(1) // still in the ribbon
   })
 
   it('filters by search text', async () => {
@@ -52,11 +56,15 @@ describe('ExercisesPage', () => {
 
     // After searching for 'ted', only TED Talks exercises should appear in the grid
     // (the ribbon still shows all recently practiced, but we verify the grid is filtered)
+    const grid = screen.getByTestId('exercise-grid')
     await waitFor(() => {
-      const tedTalksH3Elements = screen.queryAllByText('TED Talks').filter(el => el.tagName === 'H3')
-      expect(tedTalksH3Elements.length).toBeGreaterThan(0)
+      expect(within(grid).getByText('TED Talks')).toBeInTheDocument()
     })
-    expect(screen.getByText(/5 lessons/i)).toBeInTheDocument()
+    expect(within(grid).getByText(/5 lessons/i)).toBeInTheDocument()
+    // Short Stories has trackCount 10 and a non-null lastPracticedAt, so it still
+    // appears in the ribbon, but must be gone from the filtered grid.
+    expect(within(grid).queryByText('Short Stories')).not.toBeInTheDocument()
+    expect(screen.getAllByText('Short Stories').length).toBeGreaterThanOrEqual(1) // still in the ribbon
   })
 
   it('links each card to its Exercise detail page', async () => {
