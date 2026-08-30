@@ -151,9 +151,9 @@ export function SentencePracticeView({
       <button onClick={() => session && handleAdvance(session.currentSentenceIndex + 1)} disabled={!isReady}>Next</button>
 
       <ol>
-        {track.sentences.map((s) => (
+        {track.sentences.map((s, i) => (
           <li key={s.id}>
-            <button onClick={() => handleAdvance(s.index)} disabled={!isReady}>{s.index + 1}</button>
+            <button onClick={() => handleAdvance(i)} disabled={!isReady}>{i + 1}</button>
           </li>
         ))}
       </ol>
