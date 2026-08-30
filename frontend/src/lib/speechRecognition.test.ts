@@ -34,7 +34,7 @@ describe('createSingleUtteranceRecognizer', () => {
   let fakeInstance: FakeSpeechRecognition
 
   beforeEach(() => {
-    vi.stubGlobal('SpeechRecognition', vi.fn().mockImplementation(() => {
+    vi.stubGlobal('SpeechRecognition', vi.fn().mockImplementation(function () {
       fakeInstance = new FakeSpeechRecognition()
       return fakeInstance
     }))
@@ -62,7 +62,7 @@ describe('createContinuousRecognizer', () => {
   let fakeInstance: FakeSpeechRecognition
 
   beforeEach(() => {
-    vi.stubGlobal('SpeechRecognition', vi.fn().mockImplementation(() => {
+    vi.stubGlobal('SpeechRecognition', vi.fn().mockImplementation(function () {
       fakeInstance = new FakeSpeechRecognition()
       return fakeInstance
     }))

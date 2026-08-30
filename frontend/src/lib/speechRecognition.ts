@@ -7,10 +7,7 @@ type SpeechRecognitionLike = {
   stop: () => void
 }
 
-type SpeechRecognitionConstructor = {
-  new (): SpeechRecognitionLike
-  (): SpeechRecognitionLike
-}
+type SpeechRecognitionConstructor = new () => SpeechRecognitionLike
 
 function getSpeechRecognitionConstructor(): SpeechRecognitionConstructor | null {
   const w = window as unknown as {
@@ -29,7 +26,7 @@ export function createSingleUtteranceRecognizer(onResult: (text: string) => void
   if (!Constructor) {
     return { start: () => {}, stop: () => {} }
   }
-  const recognition = Constructor() as SpeechRecognitionLike
+  const recognition = new Constructor()
   recognition.continuous = false
   recognition.interimResults = false
   recognition.onresult = (event) => {
@@ -48,7 +45,7 @@ export function createContinuousRecognizer(onTranscriptUpdate: (text: string) =>
   if (!Constructor) {
     return { start: () => {}, stop: () => {} }
   }
-  const recognition = Constructor() as SpeechRecognitionLike
+  const recognition = new Constructor()
   recognition.continuous = true
   recognition.interimResults = false
   recognition.onresult = (event) => {
