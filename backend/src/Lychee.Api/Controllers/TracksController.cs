@@ -13,9 +13,10 @@ public class CreateTrackRequest
     public IFormFile AudioFile { get; set; } = null!;
     public IFormFile SrtFile { get; set; } = null!;
     public string Level { get; set; } = null!;
+    public string Title { get; set; } = null!;
 }
 
-public record TrackResponse(Guid Id, Guid UnitId, string AudioUrl, string SrtUrl, TimeSpan Duration, string Level, bool IsPublished, int SentenceCount);
+public record TrackResponse(Guid Id, Guid UnitId, string Title, string AudioUrl, string SrtUrl, TimeSpan Duration, string Level, bool IsPublished, int SentenceCount);
 
 public record UpdateTrackRequest(string Level);
 // UpdatePublishStatusRequest is defined in ExercisesController.cs and shared (same namespace).
@@ -37,7 +38,7 @@ public class TracksController : ControllerBase
     {
         var audioUrl = await ResolveReadUrlAsync(t.AudioFileUrl);
         var srtUrl = await ResolveReadUrlAsync(t.SrtFileUrl);
-        return new TrackResponse(t.Id, t.UnitId, audioUrl, srtUrl, t.Duration, t.Level, t.IsPublished, sentenceCount);
+        return new TrackResponse(t.Id, t.UnitId, t.Title, audioUrl, srtUrl, t.Duration, t.Level, t.IsPublished, sentenceCount);
     }
 
     private Task<string> ResolveReadUrlAsync(string storedPath)
@@ -95,6 +96,7 @@ public class TracksController : ControllerBase
             SrtFileUrl = srtPath,
             Duration = duration,
             Level = request.Level,
+            Title = request.Title,
             Sentences = cues.Select(c => new Sentence
             {
                 Id = Guid.NewGuid(),

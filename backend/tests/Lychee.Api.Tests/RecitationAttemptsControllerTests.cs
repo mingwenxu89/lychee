@@ -58,6 +58,7 @@ public class RecitationAttemptsControllerTests : IClassFixture<LycheeWebApplicat
         const string srt = "1\n00:00:00,000 --> 00:00:02,000\nI saw the snowfall\n\n2\n00:00:02,000 --> 00:00:04,000\nIt was magical\n";
         form.Add(new StringContent(srt), "SrtFile", "track.srt");
         form.Add(new StringContent("A1"), "Level");
+        form.Add(new StringContent("Test Track"), "Title");
         var trackResponse = await adminClient.PostAsync($"/api/admin/units/{unit!.Id}/tracks", form);
         var track = await trackResponse.Content.ReadFromJsonAsync<IdOnly>();
         return track!.Id;

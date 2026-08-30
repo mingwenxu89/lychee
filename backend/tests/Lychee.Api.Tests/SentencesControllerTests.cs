@@ -36,6 +36,7 @@ public class SentencesControllerTests : IClassFixture<LycheeWebApplicationFactor
         form.Add(new ByteArrayContent(Encoding.UTF8.GetBytes("audio")), "AudioFile", "a.mp3");
         form.Add(new StringContent("1\n00:00:00,000 --> 00:00:02,000\nOriginal text.\n"), "SrtFile", "a.srt");
         form.Add(new StringContent("A1"), "Level");
+        form.Add(new StringContent("Test Track"), "Title");
         var trackResponse = await client.PostAsync($"/api/admin/units/{unit!.Id}/tracks", form);
         var track = await trackResponse.Content.ReadFromJsonAsync<IdOnly>();
         return track!.Id;

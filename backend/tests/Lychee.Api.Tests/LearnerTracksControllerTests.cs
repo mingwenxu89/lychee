@@ -41,6 +41,7 @@ public class LearnerTracksControllerTests : IClassFixture<LycheeWebApplicationFa
         form.Add(audioContent, "AudioFile", "track.mp3");
         form.Add(new StringContent($"1\n00:00:00,000 --> 00:00:02,000\n{sentenceText}\n"), "SrtFile", "track.srt");
         form.Add(new StringContent("A1"), "Level");
+        form.Add(new StringContent("Test Track"), "Title");
 
         var response = await adminClient.PostAsync($"/api/admin/units/{unitId}/tracks", form);
         var track = await response.Content.ReadFromJsonAsync<IdOnly>();
