@@ -43,6 +43,11 @@ public class LycheeDbContext : IdentityDbContext<ApplicationUser, IdentityRole<G
             .HasForeignKey(s => s.TrackId)
             .OnDelete(DeleteBehavior.Cascade);
 
+        modelBuilder.Entity<Track>()
+            .Property(t => t.CreatedAt)
+            .HasDefaultValueSql("now()")
+            .ValueGeneratedOnAdd();
+
         modelBuilder.Entity<SentenceFavorite>().HasKey(f => new { f.UserId, f.SentenceId });
         modelBuilder.Entity<TrackFavorite>().HasKey(f => new { f.UserId, f.TrackId });
 
