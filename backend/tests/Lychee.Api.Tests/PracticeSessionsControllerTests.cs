@@ -109,5 +109,65 @@ public class PracticeSessionsControllerTests : IClassFixture<LycheeWebApplicatio
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
+    [Fact]
+    public async Task Submit_CorrectAnswer_ReturnsFullAccuracyAndPersistsRecord()
+    {
+        var admin = AdminClient();
+        var trackId = await CreateTrackWithTwoSentencesAsync(admin);
+        var learner = await LearnerClientAsync();
+
+        var startResponse = await learner.PostAsync($"/api/learner/tracks/{trackId}/practice-session/start", null);
+        var session = await startResponse.Content.ReadFromJsonAsync<PracticeSessionResponse>();
+
+        var trackResponse = await learner.GetAsync($"/api/learner/tracks/{trackId}");
+        var track = await trackResponse.Content.ReadFromJsonAsync<LearnerTrackResponse>();
+        var firstSentence = track!.Sentences[0];
+
+        var submitResponse = await learner.PostAsJsonAsync($"/api/learner/practice-sessions/{session!.Id}/submit",
+            new { sentenceId = firstSentence.Id, submittedText = firstSentence.Text });
+
+        Assert.Equal(HttpStatusCode.OK, submitResponse.StatusCode);
+        var result = await submitResponse.Content.ReadFromJsonAsync<SubmitAnswerResponse>();
+        Assert.True(result!.IsCorrect);
+        Assert.Equal(1.0, result.AccuracyScore);
+        Assert.All(result.Words, w => Assert.Equal("Correct", w.Status));
+    }
+
+    [Fact]
+    public async Task Submit_WrongAnswer_ReturnsPartialAccuracy()
+    {
+        var admin = AdminClient();
+        var trackId = await CreateTrackWithTwoSentencesAsync(admin);
+        var learner = await LearnerClientAsync();
+
+        var startResponse = await learner.PostAsync($"/api/learner/tracks/{trackId}/practice-session/start", null);
+        var session = await startResponse.Content.ReadFromJsonAsync<PracticeSessionResponse>();
+        var trackResponse = await learner.GetAsync($"/api/learner/tracks/{trackId}");
+        var track = await trackResponse.Content.ReadFromJsonAsync<LearnerTrackResponse>();
+        var firstSentence = track!.Sentences[0];
+
+        var submitResponse = await learner.PostAsJsonAsync($"/api/learner/practice-sessions/{session!.Id}/submit",
+            new { sentenceId = firstSentence.Id, submittedText = "completely wrong text" });
+
+        var result = await submitResponse.Content.ReadFromJsonAsync<SubmitAnswerResponse>();
+        Assert.False(result!.IsCorrect);
+        Assert.True(result.AccuracyScore < 1.0);
+    }
+
+    [Fact]
+    public async Task Submit_SessionBelongingToAnotherUser_Returns404()
+    {
+        var admin = AdminClient();
+        var trackId = await CreateTrackWithTwoSentencesAsync(admin);
+        var ownerStart = await (await LearnerClientAsync()).PostAsync($"/api/learner/tracks/{trackId}/practice-session/start", null);
+        var session = await ownerStart.Content.ReadFromJsonAsync<PracticeSessionResponse>();
+
+        var otherUser = await LearnerClientAsync();
+        var response = await otherUser.PostAsJsonAsync($"/api/learner/practice-sessions/{session!.Id}/submit",
+            new { sentenceId = Guid.NewGuid(), submittedText = "anything" });
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
     private record IdOnly(Guid Id);
 }

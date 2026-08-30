@@ -1,4 +1,6 @@
+using System.Text.Json;
 using Lychee.Api.Auth;
+using Lychee.Api.Content;
 using Lychee.Data;
 using Lychee.Data.Entities;
 using Microsoft.AspNetCore.Authorization;
@@ -8,6 +10,9 @@ using Microsoft.EntityFrameworkCore;
 namespace Lychee.Api.Controllers;
 
 public record PracticeSessionResponse(Guid Id, Guid TrackId, int CurrentSentenceIndex, string Status, DateTime? CompletedAt);
+public record WordDiffResponse(string Word, string Status);
+public record SubmitAnswerRequest(Guid SentenceId, string SubmittedText);
+public record SubmitAnswerResponse(double AccuracyScore, bool IsCorrect, List<WordDiffResponse> Words);
 
 [ApiController]
 [Authorize]
@@ -53,5 +58,54 @@ public class PracticeSessionsController : ControllerBase
 
         await _db.SaveChangesAsync();
         return Ok(ToResponse(session));
+    }
+
+    [HttpPost("api/learner/practice-sessions/{sessionId}/submit")]
+    public async Task<IActionResult> Submit(Guid sessionId, SubmitAnswerRequest request)
+    {
+        var userId = User.GetUserId();
+        var session = await _db.PracticeSessions.FirstOrDefaultAsync(s => s.Id == sessionId && s.UserId == userId);
+        if (session is null) return NotFound();
+
+        var sentence = await _db.Sentences.FirstOrDefaultAsync(s => s.Id == request.SentenceId && s.TrackId == session.TrackId);
+        if (sentence is null) return NotFound();
+
+        var comparison = TextComparer.Compare(sentence.Text, request.SubmittedText);
+
+        _db.PracticeRecords.Add(new PracticeRecord
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            SentenceId = sentence.Id,
+            SubmittedText = request.SubmittedText,
+            IsCorrect = comparison.IsExactMatch,
+            AccuracyScore = comparison.AccuracyScore,
+            DiffDetail = JsonSerializer.Serialize(comparison.Words),
+            CreatedAt = DateTime.UtcNow
+        });
+
+        // Logged for future activity-streak tracking (see spec §9); DailyPracticeLog's own unique
+        // index (UserId, Date, SentenceId, PracticeType) makes retries same-day a no-op insert, not a duplicate.
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var alreadyLoggedToday = await _db.DailyPracticeLogs.AnyAsync(l =>
+            l.UserId == userId && l.Date == today && l.SentenceId == sentence.Id && l.PracticeType == PracticeLogType.Practice);
+        if (!alreadyLoggedToday)
+        {
+            _db.DailyPracticeLogs.Add(new DailyPracticeLog
+            {
+                Id = Guid.NewGuid(),
+                UserId = userId,
+                Date = today,
+                SentenceId = sentence.Id,
+                PracticeType = PracticeLogType.Practice
+            });
+        }
+
+        await _db.SaveChangesAsync();
+
+        return Ok(new SubmitAnswerResponse(
+            comparison.AccuracyScore,
+            comparison.IsExactMatch,
+            comparison.Words.Select(w => new WordDiffResponse(w.Word, w.Status.ToString())).ToList()));
     }
 }
