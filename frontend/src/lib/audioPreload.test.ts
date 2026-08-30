@@ -4,7 +4,11 @@ import { preloadAudio } from './audioPreload'
 describe('preloadAudio', () => {
   beforeEach(() => {
     const fakeBlob = new Blob(['fake-audio-bytes'])
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(fakeBlob, { status: 200 })))
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      blob: async () => fakeBlob
+    }))
     vi.stubGlobal('URL', { createObjectURL: vi.fn().mockReturnValue('blob:fake-object-url') })
   })
 
@@ -16,7 +20,7 @@ describe('preloadAudio', () => {
   })
 
   it('throws when the fetch fails', async () => {
-    vi.mocked(fetch).mockResolvedValueOnce(new Response(null, { status: 500 }))
+    vi.mocked(fetch).mockResolvedValueOnce({ ok: false, status: 500 } as Response)
 
     await expect(preloadAudio('https://example.test/audio/track.mp3')).rejects.toThrow()
   })
