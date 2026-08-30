@@ -59,7 +59,29 @@ builder.Services.AddScoped<Lychee.Api.Auth.ExternalLoginService>();
 
 builder.Services.AddLycheeStorage(builder.Configuration);
 
+// The browser fetches audio bytes directly from this app's static-file host (for local dev
+// storage) rather than through the same-origin Next.js proxy — <audio> playback and the
+// sentence-mode whole-track pre-download both need this. Frontend and backend run on
+// different ports even in normal local dev, so this is a real cross-origin request, not
+// just a concern for non-default setups.
+const string DevCorsPolicy = "DevCors";
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy(DevCorsPolicy, policy =>
+    {
+        policy.SetIsOriginAllowed(origin => Uri.TryCreate(origin, UriKind.Absolute, out var uri) && uri.IsLoopback)
+            .AllowAnyMethod()
+            .AllowAnyHeader()
+            .WithExposedHeaders("Content-Range", "Accept-Ranges", "Content-Length");
+    });
+});
+
 var app = builder.Build();
+
+if (app.Environment.IsDevelopment())
+{
+    app.UseCors(DevCorsPolicy);
+}
 
 var storageOptions = builder.Configuration.GetSection("Storage").Get<StorageOptions>() ?? new StorageOptions();
 var localBlobRoot = Path.IsPathRooted(storageOptions.LocalRootPath)
