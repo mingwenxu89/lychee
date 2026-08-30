@@ -1,0 +1,75 @@
+using Lychee.Api.Auth;
+using Lychee.Api.Content;
+using Lychee.Data;
+using Lychee.Data.Entities;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+
+namespace Lychee.Api.Controllers;
+
+public record HistoryEntryResponse(
+    Guid TrackId, string TrackTitle, string ExerciseCategory, string PracticeType,
+    string Status, double? Accuracy, int? CurrentSentenceIndex, int? TotalSentences,
+    DateTime Timestamp);
+
+[ApiController]
+[Authorize]
+public class LearnerHistoryController : ControllerBase
+{
+    private readonly LycheeDbContext _db;
+
+    public LearnerHistoryController(LycheeDbContext db) => _db = db;
+
+    [HttpGet("api/learner/history")]
+    public async Task<IActionResult> List()
+    {
+        var userId = User.GetUserId();
+
+        var sessions = await _db.PracticeSessions
+            .Where(s => s.UserId == userId)
+            .Include(s => s.Track).ThenInclude(t => t.Unit).ThenInclude(u => u.Exercise)
+            .Include(s => s.Track).ThenInclude(t => t.Sentences)
+            .ToListAsync();
+
+        var attempts = await _db.RecitationAttempts
+            .Where(a => a.UserId == userId)
+            .Include(a => a.Track).ThenInclude(t => t.Unit).ThenInclude(u => u.Exercise)
+            .ToListAsync();
+
+        var allRecords = await _db.PracticeRecords
+            .Where(r => r.UserId == userId)
+            .Select(r => new { r.SentenceId, r.AccuracyScore, r.CreatedAt, TrackId = r.Sentence.TrackId })
+            .ToListAsync();
+
+        var entries = new List<HistoryEntryResponse>();
+
+        foreach (var session in sessions)
+        {
+            double? accuracy = null;
+            if (session.Status == PracticeSessionStatus.Completed)
+            {
+                var recordsForTrack = allRecords
+                    .Where(r => r.TrackId == session.TrackId)
+                    .Select(r => (r.SentenceId, r.AccuracyScore, r.CreatedAt));
+                accuracy = TrackAccuracyCalculator.ComputeOverallAccuracy(recordsForTrack);
+            }
+
+            entries.Add(new HistoryEntryResponse(
+                session.TrackId, session.Track.Title, session.Track.Unit.Exercise.Category, "Practice",
+                session.Status.ToString(), accuracy,
+                session.Status == PracticeSessionStatus.Completed ? null : session.CurrentSentenceIndex,
+                session.Status == PracticeSessionStatus.Completed ? null : session.Track.Sentences.Count,
+                session.UpdatedAt));
+        }
+
+        foreach (var attempt in attempts)
+        {
+            entries.Add(new HistoryEntryResponse(
+                attempt.TrackId, attempt.Track.Title, attempt.Track.Unit.Exercise.Category, "Recitation",
+                "Completed", attempt.Score, null, null, attempt.CreatedAt));
+        }
+
+        return Ok(entries.OrderByDescending(e => e.Timestamp).ToList());
+    }
+}
