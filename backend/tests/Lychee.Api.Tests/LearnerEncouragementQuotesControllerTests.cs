@@ -55,12 +55,25 @@ public class LearnerEncouragementQuotesControllerTests : IClassFixture<LycheeWeb
         var inactive = await inactiveResponse.Content.ReadFromJsonAsync<IdOnly>();
         await admin.PutAsJsonAsync($"/api/admin/encouragement-quotes/{inactive!.Id}", new { text = $"Never shown {suffix}!", isActive = false });
 
-        for (var i = 0; i < 10; i++)
+        try
         {
-            var response = await LearnerClient().GetAsync("/api/learner/encouragement-quotes/random");
-            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-            var quote = await response.Content.ReadFromJsonAsync<RandomQuoteResponse>();
-            Assert.Equal($"Great job {suffix}!", quote!.Text);
+            for (var i = 0; i < 10; i++)
+            {
+                var response = await LearnerClient().GetAsync("/api/learner/encouragement-quotes/random");
+                Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+                var quote = await response.Content.ReadFromJsonAsync<RandomQuoteResponse>();
+                Assert.Equal($"Great job {suffix}!", quote!.Text);
+            }
+        }
+        finally
+        {
+            // Clean up after the test
+            var finalQuotes = await admin.GetAsync("/api/admin/encouragement-quotes");
+            var finalList = await finalQuotes.Content.ReadFromJsonAsync<List<QuoteResponse>>();
+            foreach (var q in finalList ?? [])
+            {
+                await admin.DeleteAsync($"/api/admin/encouragement-quotes/{q.Id}");
+            }
         }
     }
 }
