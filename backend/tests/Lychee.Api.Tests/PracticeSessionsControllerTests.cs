@@ -101,6 +101,28 @@ public class PracticeSessionsControllerTests : IClassFixture<LycheeWebApplicatio
     }
 
     [Fact]
+    public async Task Start_ConcurrentCallsForSameUserAndTrack_BothSucceedWithSameSession()
+    {
+        var admin = AdminClient();
+        var trackId = await CreateTrackWithTwoSentencesAsync(admin);
+        var userToken = await CreateLearnerTokenAsync();
+
+        var firstClient = await LearnerClientAsync(userToken);
+        var secondClient = await LearnerClientAsync(userToken);
+
+        var firstCallTask = firstClient.PostAsync($"/api/learner/tracks/{trackId}/practice-session/start", null);
+        var secondCallTask = secondClient.PostAsync($"/api/learner/tracks/{trackId}/practice-session/start", null);
+        var responses = await Task.WhenAll(firstCallTask, secondCallTask);
+
+        Assert.Equal(HttpStatusCode.OK, responses[0].StatusCode);
+        Assert.Equal(HttpStatusCode.OK, responses[1].StatusCode);
+
+        var firstSession = await responses[0].Content.ReadFromJsonAsync<PracticeSessionResponse>();
+        var secondSession = await responses[1].Content.ReadFromJsonAsync<PracticeSessionResponse>();
+        Assert.Equal(firstSession!.Id, secondSession!.Id);
+    }
+
+    [Fact]
     public async Task Start_TrackDoesNotExist_Returns404()
     {
         var learner = await LearnerClientAsync();

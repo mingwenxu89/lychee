@@ -49,16 +49,34 @@ public class PracticeSessionsController : ControllerBase
                 UpdatedAt = DateTime.UtcNow
             };
             _db.PracticeSessions.Add(session);
+
+            try
+            {
+                await _db.SaveChangesAsync();
+            }
+            catch (DbUpdateException)
+            {
+                // Another concurrent request for this (user, track) won the insert race against
+                // the unique (UserId, TrackId) index — return the session it just created instead
+                // of erroring. React StrictMode's double-invoked effects trigger this reliably in
+                // dev; genuine concurrent requests (double-click, multiple tabs) can too.
+                _db.Entry(session).State = EntityState.Detached;
+                session = await _db.PracticeSessions
+                    .FirstAsync(s => s.UserId == userId && s.TrackId == trackId);
+            }
+
+            return Ok(ToResponse(session));
         }
-        else if (session.Status == PracticeSessionStatus.Completed)
+
+        if (session.Status == PracticeSessionStatus.Completed)
         {
             session.Status = PracticeSessionStatus.InProgress;
             session.CurrentSentenceIndex = 0;
             session.CompletedAt = null;
             session.UpdatedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync();
         }
 
-        await _db.SaveChangesAsync();
         return Ok(ToResponse(session));
     }
 
