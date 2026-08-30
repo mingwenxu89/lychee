@@ -39,41 +39,43 @@ public class LearnerEncouragementQuotesControllerTests : IClassFixture<LycheeWeb
     public async Task GetRandom_OnlyEverReturnsAnActiveQuote()
     {
         var admin = AdminClient();
+        var learner = LearnerClient();
 
-        // Clear all encouragement quotes to start fresh
-        var allQuotes = await admin.GetAsync("/api/admin/encouragement-quotes");
-        var quotes = await allQuotes.Content.ReadFromJsonAsync<List<QuoteResponse>>();
-        foreach (var q in quotes ?? [])
-        {
-            await admin.DeleteAsync($"/api/admin/encouragement-quotes/{q.Id}");
-        }
+        // Record pre-existing active quotes
+        var preexistingResponse = await admin.GetAsync("/api/admin/encouragement-quotes");
+        var preexistingQuotes = await preexistingResponse.Content.ReadFromJsonAsync<List<QuoteResponse>>();
+        var preexistingActiveTexts = (preexistingQuotes ?? [])
+            .Where(q => q.IsActive)
+            .Select(q => q.Text)
+            .ToHashSet();
 
+        // Create one new active quote
         var suffix = Guid.NewGuid().ToString("N")[..8];
-        var activeResponse = await admin.PostAsJsonAsync("/api/admin/encouragement-quotes", new { text = $"Great job {suffix}!" });
+        var newActiveText = $"Great job {suffix}!";
+        var activeResponse = await admin.PostAsJsonAsync("/api/admin/encouragement-quotes", new { text = newActiveText });
         var active = await activeResponse.Content.ReadFromJsonAsync<IdOnly>();
-        var inactiveResponse = await admin.PostAsJsonAsync("/api/admin/encouragement-quotes", new { text = $"Never shown {suffix}!" });
-        var inactive = await inactiveResponse.Content.ReadFromJsonAsync<IdOnly>();
-        await admin.PutAsJsonAsync($"/api/admin/encouragement-quotes/{inactive!.Id}", new { text = $"Never shown {suffix}!", isActive = false });
 
-        try
+        // Create one new inactive quote
+        var newInactiveText = $"Never shown {suffix}!";
+        var inactiveResponse = await admin.PostAsJsonAsync("/api/admin/encouragement-quotes", new { text = newInactiveText });
+        var inactive = await inactiveResponse.Content.ReadFromJsonAsync<IdOnly>();
+        await admin.PutAsJsonAsync($"/api/admin/encouragement-quotes/{inactive!.Id}", new { text = newInactiveText, isActive = false });
+
+        // Build the set of expected active texts: pre-existing active + new active
+        var expectedActiveTexts = new HashSet<string>(preexistingActiveTexts) { newActiveText };
+
+        // Call the learner endpoint 10 times and verify only active quotes are returned
+        for (var i = 0; i < 10; i++)
         {
-            for (var i = 0; i < 10; i++)
-            {
-                var response = await LearnerClient().GetAsync("/api/learner/encouragement-quotes/random");
-                Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-                var quote = await response.Content.ReadFromJsonAsync<RandomQuoteResponse>();
-                Assert.Equal($"Great job {suffix}!", quote!.Text);
-            }
-        }
-        finally
-        {
-            // Clean up after the test
-            var finalQuotes = await admin.GetAsync("/api/admin/encouragement-quotes");
-            var finalList = await finalQuotes.Content.ReadFromJsonAsync<List<QuoteResponse>>();
-            foreach (var q in finalList ?? [])
-            {
-                await admin.DeleteAsync($"/api/admin/encouragement-quotes/{q.Id}");
-            }
+            var response = await learner.GetAsync("/api/learner/encouragement-quotes/random");
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            var quote = await response.Content.ReadFromJsonAsync<RandomQuoteResponse>();
+
+            // Assert: returned text is in the set of expected active texts
+            Assert.Contains(quote!.Text, expectedActiveTexts);
+
+            // Assert: returned text is never the inactive quote
+            Assert.NotEqual(newInactiveText, quote.Text);
         }
     }
 }
