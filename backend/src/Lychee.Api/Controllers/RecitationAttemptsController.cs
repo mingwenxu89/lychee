@@ -90,7 +90,12 @@ public class RecitationAttemptsController : ControllerBase
             }
         }
 
-        await _db.SaveChangesAsync();
+        // This call can add MULTIPLE DailyPracticeLog rows (one per qualified sentence) in the
+        // same SaveChanges as the RecitationAttempt above. Concurrent identical attempts racing
+        // on the same rows can surface as either a unique-violation or, because of the multi-row
+        // batch, a Postgres deadlock — see DbErrorHelpers for why both need recovering so the
+        // RecitationAttempt still commits.
+        await DbErrorHelpers.SaveChangesRecoveringDailyPracticeLogRaceAsync(_db);
 
         return Ok(new RecitationAttemptResponse(
             attempt.Id,

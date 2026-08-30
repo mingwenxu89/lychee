@@ -224,6 +224,34 @@ public class PracticeSessionsControllerTests : IClassFixture<LycheeWebApplicatio
     }
 
     [Fact]
+    public async Task Submit_ConcurrentCallsForSameSentence_BothSucceed()
+    {
+        var admin = AdminClient();
+        var trackId = await CreateTrackWithTwoSentencesAsync(admin);
+        var userToken = await CreateLearnerTokenAsync();
+
+        var startResponse = await (await LearnerClientAsync(userToken)).PostAsync(
+            $"/api/learner/tracks/{trackId}/practice-session/start", null);
+        var session = await startResponse.Content.ReadFromJsonAsync<PracticeSessionResponse>();
+
+        var trackResponse = await (await LearnerClientAsync(userToken)).GetAsync($"/api/learner/tracks/{trackId}");
+        var track = await trackResponse.Content.ReadFromJsonAsync<LearnerTrackResponse>();
+        var firstSentence = track!.Sentences[0];
+
+        var firstClient = await LearnerClientAsync(userToken);
+        var secondClient = await LearnerClientAsync(userToken);
+
+        var firstCallTask = firstClient.PostAsJsonAsync($"/api/learner/practice-sessions/{session!.Id}/submit",
+            new { sentenceId = firstSentence.Id, submittedText = firstSentence.Text });
+        var secondCallTask = secondClient.PostAsJsonAsync($"/api/learner/practice-sessions/{session.Id}/submit",
+            new { sentenceId = firstSentence.Id, submittedText = firstSentence.Text });
+        var responses = await Task.WhenAll(firstCallTask, secondCallTask);
+
+        Assert.Equal(HttpStatusCode.OK, responses[0].StatusCode);
+        Assert.Equal(HttpStatusCode.OK, responses[1].StatusCode);
+    }
+
+    [Fact]
     public async Task Submit_SessionBelongingToAnotherUser_Returns404()
     {
         var admin = AdminClient();

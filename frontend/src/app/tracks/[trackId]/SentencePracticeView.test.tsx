@@ -100,6 +100,40 @@ describe('SentencePracticeView', () => {
     })))
   })
 
+  it('shows an inline error and keeps the typed answer when submit fails', async () => {
+    mockFetchSequence([
+      new Response(new Blob(['audio-bytes']), { status: 200 }),
+      new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 }),
+      new Response(null, { status: 500 })
+    ])
+
+    render(<SentencePracticeView track={track} initialSentenceIndex={null} onCompleted={vi.fn()} />)
+    await waitFor(() => expect(screen.getByRole('button', { name: /submit/i })).not.toBeDisabled())
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Hello there.' } })
+    fireEvent.click(screen.getByRole('button', { name: /submit/i }))
+
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/failed to submit/i))
+    expect(screen.getByRole('textbox')).toHaveValue('Hello there.')
+  })
+
+  it('shows an inline error and keeps the current sentence when advance fails', async () => {
+    mockFetchSequence([
+      new Response(new Blob(['audio-bytes']), { status: 200 }),
+      new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 }),
+      new Response(null, { status: 500 })
+    ])
+
+    render(<SentencePracticeView track={track} initialSentenceIndex={null} onCompleted={vi.fn()} />)
+    await waitFor(() => expect(screen.getByRole('button', { name: /submit/i })).not.toBeDisabled())
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'my draft answer' } })
+    fireEvent.click(screen.getByRole('button', { name: /^next$/i }))
+
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/failed to save your progress/i))
+    expect(screen.getByRole('textbox')).toHaveValue('my draft answer')
+  })
+
   it('when initialSentenceIndex is provided, advances there immediately instead of resuming', async () => {
     mockFetchSequence([
       new Response(new Blob(['audio-bytes']), { status: 200 }),

@@ -121,7 +121,10 @@ public class PracticeSessionsController : ControllerBase
             });
         }
 
-        await _db.SaveChangesAsync();
+        // See DbErrorHelpers for why this needs to recover from both a unique-violation and a
+        // deadlock: two concurrent Submit calls for the same (user, date, sentence, type) can hit
+        // either, and either one should not cost us the PracticeRecord added above.
+        await DbErrorHelpers.SaveChangesRecoveringDailyPracticeLogRaceAsync(_db);
 
         return Ok(new SubmitAnswerResponse(
             comparison.AccuracyScore,

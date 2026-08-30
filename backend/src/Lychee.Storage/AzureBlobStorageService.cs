@@ -5,6 +5,15 @@ using Microsoft.Extensions.Options;
 
 namespace Lychee.Storage;
 
+/// <summary>
+/// Deployment note: <see cref="GetReadUrlAsync"/> returns a SAS URL that the LEARNER'S BROWSER
+/// fetches directly (e.g. sentence-mode's whole-track audio pre-download in
+/// frontend/src/lib/audioPreload.ts) — this backend is not in that request path. That means the
+/// Azure Storage Account backing this service must have its own CORS rules configured (allowing
+/// GET, and the deployed frontend's origin) or those browser-side fetches will fail; this API's
+/// own CORS policy (see Program.cs) has no effect on requests the browser sends straight to
+/// Azure Blob Storage.
+/// </summary>
 public class AzureBlobStorageService : IBlobStorageService
 {
     private readonly BlobServiceClient _blobServiceClient;

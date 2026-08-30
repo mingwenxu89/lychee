@@ -25,6 +25,7 @@ export function SentencePracticeView({
   const [answer, setAnswer] = useState('')
   const [result, setResult] = useState<SubmitResult | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
 
   useEffect(() => {
@@ -80,6 +81,7 @@ export function SentencePracticeView({
 
   async function handleSubmit() {
     if (!session || !currentSentence) return
+    setActionError(null)
     const response = await fetch(`/api/learner/practice-sessions/${session.id}/submit`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -87,17 +89,23 @@ export function SentencePracticeView({
     })
     if (response.ok) {
       setResult(await response.json())
+    } else {
+      setActionError('Failed to submit your answer. Please try again.')
     }
   }
 
   async function handleAdvance(toIndex: number) {
     if (!session) return
+    setActionError(null)
     const response = await fetch(`/api/learner/practice-sessions/${session.id}/advance`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ toIndex })
     })
-    if (!response.ok) return
+    if (!response.ok) {
+      setActionError('Failed to save your progress. Please try again.')
+      return
+    }
     const advanced: AdvanceResult = await response.json()
     setAnswer('')
     setResult(null)
@@ -140,6 +148,8 @@ export function SentencePracticeView({
         )}
         <button onClick={handleSubmit} disabled={!isReady}>Submit</button>
       </div>
+
+      {actionError && <p role="alert">{actionError}</p>}
 
       {result && (
         <div>

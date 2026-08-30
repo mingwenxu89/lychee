@@ -25,15 +25,20 @@ public class RecitationAttemptsControllerTests : IClassFixture<LycheeWebApplicat
         return client;
     }
 
-    private async Task<HttpClient> LearnerClientAsync()
+    private async Task<HttpClient> LearnerClientAsync(string? userToken = null)
     {
         var client = _factory.CreateClient();
+        var token = userToken ?? await CreateLearnerTokenAsync();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        return client;
+    }
+
+    private async Task<string> CreateLearnerTokenAsync()
+    {
         var jwtTokenService = _factory.Services.GetRequiredService<IJwtTokenService>();
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<LycheeDbContext>();
-        var token = await TestTokens.ForRoleAsync(jwtTokenService, db, "User");
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        return client;
+        return await TestTokens.ForRoleAsync(jwtTokenService, db, "User");
     }
 
     private static async Task<Guid> CreateTrackWithTwoSentencesAsync(HttpClient adminClient)
@@ -108,6 +113,31 @@ public class RecitationAttemptsControllerTests : IClassFixture<LycheeWebApplicat
         var firstResult = await first.Content.ReadFromJsonAsync<RecitationAttemptResponse>();
         var secondResult = await second.Content.ReadFromJsonAsync<RecitationAttemptResponse>();
         Assert.NotEqual(firstResult!.Id, secondResult!.Id);
+    }
+
+    [Fact]
+    public async Task Submit_ConcurrentIdenticalAttempts_BothSucceed()
+    {
+        var admin = AdminClient();
+        var trackId = await CreateTrackWithTwoSentencesAsync(admin);
+        var userToken = await CreateLearnerTokenAsync();
+
+        var firstClient = await LearnerClientAsync(userToken);
+        var secondClient = await LearnerClientAsync(userToken);
+
+        var firstCallTask = firstClient.PostAsJsonAsync($"/api/learner/tracks/{trackId}/recitation-attempts",
+            new { submittedText = "I saw the snowfall It was magical" });
+        var secondCallTask = secondClient.PostAsJsonAsync($"/api/learner/tracks/{trackId}/recitation-attempts",
+            new { submittedText = "I saw the snowfall It was magical" });
+        var responses = await Task.WhenAll(firstCallTask, secondCallTask);
+
+        Assert.Equal(HttpStatusCode.OK, responses[0].StatusCode);
+        Assert.Equal(HttpStatusCode.OK, responses[1].StatusCode);
+
+        var firstResult = await responses[0].Content.ReadFromJsonAsync<RecitationAttemptResponse>();
+        var secondResult = await responses[1].Content.ReadFromJsonAsync<RecitationAttemptResponse>();
+        Assert.Equal(2, firstResult!.QualifiedSentenceIds.Count);
+        Assert.Equal(2, secondResult!.QualifiedSentenceIds.Count);
     }
 
     [Fact]

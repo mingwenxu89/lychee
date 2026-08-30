@@ -18,6 +18,7 @@ export function RecitationPanel({
   const [transcript, setTranscript] = useState('')
   const [isRecording, setIsRecording] = useState(false)
   const [result, setResult] = useState<RecitationResult | null>(null)
+  const [submitError, setSubmitError] = useState<string | null>(null)
   const [recognizer] = useState(() => createContinuousRecognizer((text) => setTranscript(text)))
 
   function handleStartRecording() {
@@ -31,12 +32,16 @@ export function RecitationPanel({
   }
 
   async function handleSubmit() {
+    setSubmitError(null)
     const response = await fetch(`/api/learner/tracks/${trackId}/recitation-attempts`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ submittedText: transcript })
     })
-    if (!response.ok) return
+    if (!response.ok) {
+      setSubmitError('Failed to submit your recitation. Please try again.')
+      return
+    }
     setResult(await response.json())
   }
 
@@ -79,6 +84,7 @@ export function RecitationPanel({
         onChange={(e) => setTranscript(e.target.value)}
         placeholder="Recite the full text, or type it here"
       />
+      {submitError && <p role="alert">{submitError}</p>}
       <button onClick={handleSubmit}>Submit</button>
     </div>
   )

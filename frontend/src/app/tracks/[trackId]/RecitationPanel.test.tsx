@@ -45,6 +45,17 @@ describe('RecitationPanel', () => {
     expect(onCompleted).not.toHaveBeenCalled()
   })
 
+  it('shows an inline error and keeps the transcript when submit fails', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(null, { status: 500 }))
+    render(<RecitationPanel trackId="track-1" onCompleted={vi.fn()} onClose={vi.fn()} />)
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Hello there' } })
+    fireEvent.click(screen.getByRole('button', { name: /submit/i }))
+
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/failed to submit your recitation/i))
+    expect(screen.getByRole('textbox')).toHaveValue('Hello there')
+  })
+
   it('close calls onClose without submitting', () => {
     const onClose = vi.fn()
     render(<RecitationPanel trackId="track-1" onCompleted={vi.fn()} onClose={onClose} />)
