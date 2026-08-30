@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
 import { SentencePracticeView } from './SentencePracticeView'
+import { FullTextView } from './FullTextView'
 
 export type LearnerSentence = { id: string; index: number; text: string; startTime: string; endTime: string }
 export type LearnerTrack = {
@@ -74,7 +75,11 @@ function TrackPageContent() {
           onCompleted={() => {}}
         />
       ) : (
-        <p>Full text mode coming soon.</p>
+        <FullTextView
+          track={track}
+          onEnterSentenceMode={() => {}}
+          onRecitationCompleted={() => {}}
+        />
       )}
     </main>
   )
