@@ -156,15 +156,8 @@ public class PracticeSessionsController : ControllerBase
                 .Select(r => new { r.SentenceId, r.AccuracyScore, r.CreatedAt })
                 .ToListAsync();
 
-            // Materialized above (bounded by sentence-count x a few retries — never large) so the
-            // "latest attempt per sentence" grouping runs in memory rather than risking an
-            // untranslatable GroupBy+OrderBy+First EF Core query against Postgres.
-            var latestPerSentence = records
-                .GroupBy(r => r.SentenceId)
-                .Select(g => g.OrderByDescending(r => r.CreatedAt).First().AccuracyScore)
-                .ToList();
-
-            overallAccuracy = latestPerSentence.Count == 0 ? 0.0 : latestPerSentence.Average();
+            overallAccuracy = TrackAccuracyCalculator.ComputeOverallAccuracy(
+                records.Select(r => (r.SentenceId, r.AccuracyScore, r.CreatedAt)));
         }
 
         await _db.SaveChangesAsync();
