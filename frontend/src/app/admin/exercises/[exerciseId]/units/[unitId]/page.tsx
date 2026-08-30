@@ -17,6 +17,7 @@ type Track = {
 export default function UnitDetailPage() {
   const { exerciseId, unitId } = useParams<{ exerciseId: string; unitId: string }>()
   const [tracks, setTracks] = useState<Track[]>([])
+  const [title, setTitle] = useState('')
   const [level, setLevel] = useState('A1')
   const [audioFile, setAudioFile] = useState<File | null>(null)
   const [srtFile, setSrtFile] = useState<File | null>(null)
@@ -44,6 +45,7 @@ export default function UnitDetailPage() {
     const formData = new FormData()
     formData.append('AudioFile', audioFile)
     formData.append('SrtFile', srtFile)
+    formData.append('Title', title)
     formData.append('Level', level)
 
     const response = await fetch(`/api/admin/units/${unitId}/tracks`, { method: 'POST', body: formData })
@@ -53,6 +55,7 @@ export default function UnitDetailPage() {
     }
     setAudioFile(null)
     setSrtFile(null)
+    setTitle('')
     await loadTracks()
   }
 
@@ -77,6 +80,10 @@ export default function UnitDetailPage() {
         <label>
           SRT file
           <input type="file" accept=".srt" onChange={(e) => setSrtFile(e.target.files?.[0] ?? null)} />
+        </label>
+        <label>
+          Track title
+          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Track title" required />
         </label>
         <label>
           Level (CEFR)
