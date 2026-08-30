@@ -53,6 +53,6 @@ describe('FullTextView', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /recite full text/i }))
 
-    expect(screen.getByRole('button', { name: /start recording/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /submit/i })).toBeInTheDocument()
   })
 })

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { parseTimeSpanToSeconds } from '@/lib/timeSpan'
 import type { LearnerTrack } from './page'
+import { RecitationPanel } from './RecitationPanel'
 
 export function FullTextView({
   track,
@@ -81,10 +82,11 @@ export function FullTextView({
       <button onClick={() => setShowRecitation(true)}>Recite Full Text</button>
 
       {showRecitation && (
-        <div>
-          <button onClick={() => setShowRecitation(false)}>Close</button>
-          <button aria-label="start recording">Start Recording</button>
-        </div>
+        <RecitationPanel
+          trackId={track.id}
+          onCompleted={onRecitationCompleted}
+          onClose={() => setShowRecitation(false)}
+        />
       )}
     </div>
   )
