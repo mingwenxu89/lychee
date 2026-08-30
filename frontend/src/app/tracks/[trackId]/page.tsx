@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useState } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
+import { SentencePracticeView } from './SentencePracticeView'
 
 export type LearnerSentence = { id: string; index: number; text: string; startTime: string; endTime: string }
 export type LearnerTrack = {
@@ -66,7 +67,15 @@ function TrackPageContent() {
         </button>
       </div>
 
-      {mode === 'sentence' ? <p>Sentence practice coming soon.</p> : <p>Full text mode coming soon.</p>}
+      {mode === 'sentence' ? (
+        <SentencePracticeView
+          track={track}
+          initialSentenceIndex={null}
+          onCompleted={() => {}}
+        />
+      ) : (
+        <p>Full text mode coming soon.</p>
+      )}
     </main>
   )
 }
