@@ -1,5 +1,9 @@
+'use client'
+
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
+
 type NavBarProps = {
-  activePath: string
   rankLabel: string
   activityDays: number // 0-7
   userInitial: string | null
@@ -11,7 +15,8 @@ const NAV_ITEMS: { label: string; href: string }[] = [
   { label: 'History', href: '/history' }
 ]
 
-export function NavBar({ activePath, rankLabel, activityDays, userInitial }: NavBarProps) {
+export function NavBar({ rankLabel, activityDays, userInitial }: NavBarProps) {
+  const pathname = usePathname()
   const activityLightness = 30 + (activityDays / 7) * 55 // 30% (darkest) to 85% (brightest)
 
   return (
@@ -34,15 +39,16 @@ export function NavBar({ activePath, rankLabel, activityDays, userInitial }: Nav
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 36, fontWeight: 800, fontSize: 15 }}>
         {NAV_ITEMS.map((item) => {
-          const isActive = item.href === activePath
+          const isActive = item.href === pathname
           return (
-            <span
+            <Link
               key={item.href}
+              href={item.href}
               aria-current={isActive ? 'page' : undefined}
-              style={{ color: isActive ? 'var(--primary-dark)' : 'var(--ink-soft)' }}
+              style={{ color: isActive ? 'var(--primary-dark)' : 'var(--ink-soft)', textDecoration: 'none' }}
             >
               {item.label}
-            </span>
+            </Link>
           )
         })}
       </div>

@@ -8,7 +8,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <body>
-        <NavBar activePath="/" rankLabel="Seedling" activityDays={0} userInitial={null} />
+        <NavBar rankLabel="Seedling" activityDays={0} userInitial={null} />
         {children}
       </body>
     </html>
