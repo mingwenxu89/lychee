@@ -13,6 +13,8 @@ public record PracticeSessionResponse(Guid Id, Guid TrackId, int CurrentSentence
 public record WordDiffResponse(string Word, string Status);
 public record SubmitAnswerRequest(Guid SentenceId, string SubmittedText);
 public record SubmitAnswerResponse(double AccuracyScore, bool IsCorrect, List<WordDiffResponse> Words);
+public record AdvanceSessionRequest(int ToIndex);
+public record AdvanceSessionResponse(int CurrentSentenceIndex, bool IsCompleted, double? OverallAccuracy);
 
 [ApiController]
 [Authorize]
@@ -107,5 +109,44 @@ public class PracticeSessionsController : ControllerBase
             comparison.AccuracyScore,
             comparison.IsExactMatch,
             comparison.Words.Select(w => new WordDiffResponse(w.Word, w.Status.ToString())).ToList()));
+    }
+
+    [HttpPost("api/learner/practice-sessions/{sessionId}/advance")]
+    public async Task<IActionResult> Advance(Guid sessionId, AdvanceSessionRequest request)
+    {
+        var userId = User.GetUserId();
+        var session = await _db.PracticeSessions.FirstOrDefaultAsync(s => s.Id == sessionId && s.UserId == userId);
+        if (session is null) return NotFound();
+
+        var sentenceCount = await _db.Sentences.CountAsync(s => s.TrackId == session.TrackId);
+        var isCompleted = request.ToIndex >= sentenceCount;
+
+        session.CurrentSentenceIndex = request.ToIndex;
+        session.UpdatedAt = DateTime.UtcNow;
+
+        double? overallAccuracy = null;
+        if (isCompleted)
+        {
+            session.Status = PracticeSessionStatus.Completed;
+            session.CompletedAt = DateTime.UtcNow;
+
+            var records = await _db.PracticeRecords
+                .Where(r => r.UserId == userId && r.Sentence.TrackId == session.TrackId)
+                .Select(r => new { r.SentenceId, r.AccuracyScore, r.CreatedAt })
+                .ToListAsync();
+
+            // Materialized above (bounded by sentence-count x a few retries — never large) so the
+            // "latest attempt per sentence" grouping runs in memory rather than risking an
+            // untranslatable GroupBy+OrderBy+First EF Core query against Postgres.
+            var latestPerSentence = records
+                .GroupBy(r => r.SentenceId)
+                .Select(g => g.OrderByDescending(r => r.CreatedAt).First().AccuracyScore)
+                .ToList();
+
+            overallAccuracy = latestPerSentence.Count == 0 ? 0.0 : latestPerSentence.Average();
+        }
+
+        await _db.SaveChangesAsync();
+        return Ok(new AdvanceSessionResponse(session.CurrentSentenceIndex, isCompleted, overallAccuracy));
     }
 }

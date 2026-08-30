@@ -80,7 +80,7 @@ public class PracticeSessionsControllerTests : IClassFixture<LycheeWebApplicatio
         Assert.Null(session.CompletedAt);
     }
 
-    [Fact(Skip = "Enabled in Task 6 once /advance exists")]
+    [Fact]
     public async Task Start_ExistingInProgressSession_ResumesAtCurrentIndex_SameSessionId()
     {
         var admin = AdminClient();
@@ -152,6 +152,53 @@ public class PracticeSessionsControllerTests : IClassFixture<LycheeWebApplicatio
         var result = await submitResponse.Content.ReadFromJsonAsync<SubmitAnswerResponse>();
         Assert.False(result!.IsCorrect);
         Assert.True(result.AccuracyScore < 1.0);
+    }
+
+    [Fact]
+    public async Task Advance_JumpToSpecificIndex_UpdatesCurrentSentenceIndex()
+    {
+        var admin = AdminClient();
+        var trackId = await CreateTrackWithTwoSentencesAsync(admin);
+        var learner = await LearnerClientAsync();
+        var startResponse = await learner.PostAsync($"/api/learner/tracks/{trackId}/practice-session/start", null);
+        var session = await startResponse.Content.ReadFromJsonAsync<PracticeSessionResponse>();
+
+        var response = await learner.PostAsJsonAsync($"/api/learner/practice-sessions/{session!.Id}/advance", new { toIndex = 1 });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var result = await response.Content.ReadFromJsonAsync<AdvanceSessionResponse>();
+        Assert.Equal(1, result!.CurrentSentenceIndex);
+        Assert.False(result.IsCompleted);
+        Assert.Null(result.OverallAccuracy);
+    }
+
+    [Fact]
+    public async Task Advance_PastLastSentence_CompletesSessionAndComputesAccuracy()
+    {
+        var admin = AdminClient();
+        var trackId = await CreateTrackWithTwoSentencesAsync(admin);
+        var learner = await LearnerClientAsync();
+        var startResponse = await learner.PostAsync($"/api/learner/tracks/{trackId}/practice-session/start", null);
+        var session = await startResponse.Content.ReadFromJsonAsync<PracticeSessionResponse>();
+        var trackResponse = await learner.GetAsync($"/api/learner/tracks/{trackId}");
+        var track = await trackResponse.Content.ReadFromJsonAsync<LearnerTrackResponse>();
+
+        foreach (var sentence in track!.Sentences)
+        {
+            await learner.PostAsJsonAsync($"/api/learner/practice-sessions/{session!.Id}/submit",
+                new { sentenceId = sentence.Id, submittedText = sentence.Text });
+        }
+
+        var response = await learner.PostAsJsonAsync($"/api/learner/practice-sessions/{session!.Id}/advance", new { toIndex = 2 });
+
+        var result = await response.Content.ReadFromJsonAsync<AdvanceSessionResponse>();
+        Assert.True(result!.IsCompleted);
+        Assert.Equal(1.0, result.OverallAccuracy);
+
+        var reStartResponse = await learner.PostAsync($"/api/learner/tracks/{trackId}/practice-session/start", null);
+        var reStarted = await reStartResponse.Content.ReadFromJsonAsync<PracticeSessionResponse>();
+        Assert.Equal("InProgress", reStarted!.Status);
+        Assert.Equal(0, reStarted.CurrentSentenceIndex);
     }
 
     [Fact]
