@@ -25,19 +25,17 @@ describe('TrackPage', () => {
     render(<TrackPage />)
 
     await waitFor(() => expect(fetch).toHaveBeenCalledWith('/api/learner/tracks/track-1'))
-    expect(await screen.findByText('Sentence')).toBeInTheDocument()
-    expect(screen.getByText('Sentence')).toHaveAttribute('aria-current', 'page')
+    expect(await screen.findByText('By Sentence')).toBeInTheDocument()
+    expect(screen.getByText('By Sentence')).toHaveAttribute('aria-current', 'page')
   })
 
   it('switches to Full Text mode on tab click', async () => {
-    const { default: userEventFree } = { default: null } // no user-event dependency in this project; use fireEvent
-    void userEventFree
     render(<TrackPage />)
-    await screen.findByText('Sentence')
+    await screen.findByText('By Sentence')
 
     const { fireEvent } = await import('@testing-library/react')
-    fireEvent.click(screen.getByText('Full Text'))
+    fireEvent.click(screen.getByText('Full Listen'))
 
-    expect(screen.getByText('Full Text')).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByText('Full Listen')).toHaveAttribute('aria-current', 'page')
   })
 })

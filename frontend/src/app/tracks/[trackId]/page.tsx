@@ -52,7 +52,7 @@ function TrackPageContent() {
   }, [trackId])
 
   if (error) return <main style={{ padding: 40 }}>{error}</main>
-  if (!track) return <main style={{ padding: 40 }}>Loading...</main>
+  if (!track) return <main style={{ padding: 40, color: 'var(--ink-soft)', fontWeight: 700 }}>Loading...</main>
 
   function handlePracticeAgain() {
     setCompletion(null)
@@ -75,7 +75,16 @@ function TrackPageContent() {
 
   if (completion) {
     return (
-      <main style={{ padding: 40 }}>
+      <main
+        style={{
+          padding: 40,
+          minHeight: 'calc(100vh - 76px)',
+          background: 'oklch(22% 0.03 270 / 0.55)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}
+      >
         <CompletionPage
           accuracyScore={completion.accuracyScore}
           hasNextTrack={track.nextTrackId !== null}
@@ -87,21 +96,45 @@ function TrackPageContent() {
   }
 
   return (
-    <main style={{ padding: 40 }}>
-      <div style={{ display: 'flex', gap: 24, marginBottom: 24 }}>
+    <main style={{ padding: '36px 40px', display: 'flex', flexDirection: 'column', gap: 18 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--ink-faint)', fontSize: 13, fontWeight: 700 }}>
+        <span>Practice</span>
+        <span>/</span>
+        <span style={{ color: 'var(--ink-soft)' }}>Level {track.level}</span>
+      </div>
+
+      <div style={{ display: 'flex', gap: 8, background: 'oklch(96% 0.01 80)', padding: 6, borderRadius: 999, width: 'fit-content' }}>
         <button
           aria-current={mode === 'sentence' ? 'page' : undefined}
           onClick={() => setMode('sentence')}
-          style={{ fontWeight: mode === 'sentence' ? 800 : 400 }}
+          style={{
+            border: 'none',
+            borderRadius: 999,
+            fontWeight: 800,
+            fontSize: 14,
+            padding: '9px 22px',
+            cursor: 'pointer',
+            background: mode === 'sentence' ? 'var(--primary)' : 'transparent',
+            color: mode === 'sentence' ? 'white' : 'var(--ink-soft)'
+          }}
         >
-          Sentence
+          By Sentence
         </button>
         <button
           aria-current={mode === 'full' ? 'page' : undefined}
           onClick={() => setMode('full')}
-          style={{ fontWeight: mode === 'full' ? 800 : 400 }}
+          style={{
+            border: 'none',
+            borderRadius: 999,
+            fontWeight: 800,
+            fontSize: 14,
+            padding: '9px 22px',
+            cursor: 'pointer',
+            background: mode === 'full' ? 'var(--primary)' : 'transparent',
+            color: mode === 'full' ? 'white' : 'var(--ink-soft)'
+          }}
         >
-          Full Text
+          Full Listen
         </button>
       </div>
 

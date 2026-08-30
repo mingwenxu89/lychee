@@ -67,7 +67,7 @@ describe('SentencePracticeView', () => {
     }))
   })
 
-  it('Next advances the session and calls onCompleted after the last sentence', async () => {
+  it('Skip advances the session and calls onCompleted after the last sentence', async () => {
     const onCompleted = vi.fn()
     mockFetchSequence([
       new Response(new Blob(['audio-bytes']), { status: 200 }),
@@ -78,9 +78,31 @@ describe('SentencePracticeView', () => {
     render(<SentencePracticeView track={track} initialSentenceIndex={null} onCompleted={onCompleted} />)
     await waitFor(() => expect(screen.getByRole('button', { name: /submit/i })).not.toBeDisabled())
 
-    fireEvent.click(screen.getByRole('button', { name: /^next$/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^skip$/i }))
 
     await waitFor(() => expect(onCompleted).toHaveBeenCalledWith(0.9))
+  })
+
+  it('Next advances after a correct submission', async () => {
+    mockFetchSequence([
+      new Response(new Blob(['audio-bytes']), { status: 200 }),
+      new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 }),
+      new Response(JSON.stringify({ accuracyScore: 1, isCorrect: true, words: [{ word: 'Hello', status: 'Correct' }] }), { status: 200 }),
+      new Response(JSON.stringify({ currentSentenceIndex: 1, isCompleted: false, overallAccuracy: null }), { status: 200 })
+    ])
+
+    render(<SentencePracticeView track={track} initialSentenceIndex={null} onCompleted={vi.fn()} />)
+    await waitFor(() => expect(screen.getByRole('button', { name: /submit/i })).not.toBeDisabled())
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Hello there.' } })
+    fireEvent.click(screen.getByRole('button', { name: /submit/i }))
+    await screen.findByText('Hello')
+
+    fireEvent.click(screen.getByRole('button', { name: /^next$/i }))
+
+    await waitFor(() => expect(fetch).toHaveBeenLastCalledWith('/api/learner/practice-sessions/session-1/advance', expect.objectContaining({
+      body: JSON.stringify({ toIndex: 1 })
+    })))
   })
 
   it('jumps to a clicked sentence in the list', async () => {
@@ -128,7 +150,7 @@ describe('SentencePracticeView', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: /submit/i })).not.toBeDisabled())
 
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'my draft answer' } })
-    fireEvent.click(screen.getByRole('button', { name: /^next$/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^skip$/i }))
 
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/failed to save your progress/i))
     expect(screen.getByRole('textbox')).toHaveValue('my draft answer')

@@ -26,7 +26,7 @@ describe('RecitationPanel', () => {
     expect(await screen.findByText('Hello')).toBeInTheDocument()
     expect(onCompleted).not.toHaveBeenCalled()
 
-    fireEvent.click(screen.getByRole('button', { name: /finish/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^done$/i }))
     expect(onCompleted).toHaveBeenCalledWith(0.9)
   })
 
