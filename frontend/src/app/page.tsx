@@ -85,14 +85,10 @@ export default function ExercisesPage() {
   const recentlyPracticed = useMemo(() => {
     if (!exercises) return []
     return exercises
-      .filter((e) => {
-        const matchesCategory = activeCategory === 'All' || e.category === activeCategory
-        const matchesSearch = e.title.toLowerCase().includes(search.toLowerCase())
-        return e.lastPracticedAt !== null && matchesCategory && matchesSearch
-      })
+      .filter((e) => e.lastPracticedAt !== null)
       .sort((a, b) => new Date(b.lastPracticedAt!).getTime() - new Date(a.lastPracticedAt!).getTime())
       .slice(0, 5)
-  }, [exercises, activeCategory, search])
+  }, [exercises])
 
   const filtered = useMemo(() => {
     if (!exercises) return []
@@ -137,16 +133,15 @@ export default function ExercisesPage() {
           <button
             key={category}
             onClick={() => setActiveCategory(category)}
-            aria-label={category}
             style={{
               borderRadius: 999, padding: '10px 20px', fontWeight: 800, fontSize: 14, cursor: 'pointer', border: 'none',
               background: activeCategory === category ? 'var(--primary)' : 'var(--surface)',
               color: activeCategory === category ? 'white' : 'var(--ink-soft)',
-              ...(activeCategory !== category ? { border: '2px solid var(--line)' } : {}),
-              minWidth: 40,
-              minHeight: 40
+              ...(activeCategory !== category ? { border: '2px solid var(--line)' } : {})
             }}
-          />
+          >
+            {category}
+          </button>
         ))}
       </div>
 
