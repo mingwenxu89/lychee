@@ -11,6 +11,10 @@ public record LearnerExerciseResponse(
     Guid Id, string Title, string Category, string? DifficultyRangeLabel,
     int TrackCount, int CompletedTrackCount, DateTime? LastPracticedAt);
 
+public record LearnerExerciseTrackResponse(Guid Id, string Title, string Level, TimeSpan Duration, bool IsCompletedByUser);
+public record LearnerExerciseUnitResponse(Guid Id, string Title, int Order, List<LearnerExerciseTrackResponse> Tracks);
+public record LearnerExerciseDetailResponse(Guid Id, string Title, string? Description, string Category, List<LearnerExerciseUnitResponse> Units);
+
 [ApiController]
 [Authorize]
 public class LearnerExercisesController : ControllerBase
@@ -70,5 +74,34 @@ public class LearnerExercisesController : ControllerBase
         }
 
         return Ok(responses);
+    }
+
+    [HttpGet("api/learner/exercises/{id}")]
+    public async Task<IActionResult> Get(Guid id)
+    {
+        var exercise = await _db.Exercises
+            .Where(e => e.Id == id && e.IsPublished)
+            .Include(e => e.Units.Where(u => u.IsPublished))
+                .ThenInclude(u => u.Tracks.Where(t => t.IsPublished))
+            .FirstOrDefaultAsync();
+        if (exercise is null) return NotFound();
+
+        var userId = User.GetUserId();
+        var trackIds = exercise.Units.SelectMany(u => u.Tracks).Select(t => t.Id).ToList();
+        var completedTrackIds = await _db.PracticeSessions
+            .Where(s => s.UserId == userId && trackIds.Contains(s.TrackId) && s.Status == PracticeSessionStatus.Completed)
+            .Select(s => s.TrackId)
+            .ToListAsync();
+        var completedSet = completedTrackIds.ToHashSet();
+
+        var units = exercise.Units
+            .OrderBy(u => u.Order)
+            .Select(u => new LearnerExerciseUnitResponse(
+                u.Id, u.Title, u.Order,
+                u.Tracks.Select(t => new LearnerExerciseTrackResponse(
+                    t.Id, t.Title, t.Level, t.Duration, completedSet.Contains(t.Id))).ToList()))
+            .ToList();
+
+        return Ok(new LearnerExerciseDetailResponse(exercise.Id, exercise.Title, exercise.Description, exercise.Category, units));
     }
 }

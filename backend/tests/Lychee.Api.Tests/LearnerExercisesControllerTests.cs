@@ -117,4 +117,40 @@ public class LearnerExercisesControllerTests : IClassFixture<LycheeWebApplicatio
         Assert.Equal(1, found.CompletedTrackCount);
         Assert.NotNull(found.LastPracticedAt);
     }
+
+    [Fact]
+    public async Task Get_ReturnsUnitsAndTracksInOrder()
+    {
+        var admin = AdminClient();
+        var (exerciseId, _) = await CreatePublishedExerciseWithOneTrackAsync(admin, "A1");
+
+        var response = await (await LearnerClientAsync()).GetAsync($"/api/learner/exercises/{exerciseId}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var detail = await response.Content.ReadFromJsonAsync<LearnerExerciseDetailResponse>();
+        Assert.Single(detail!.Units);
+        Assert.Single(detail.Units[0].Tracks);
+        Assert.Equal("Track One", detail.Units[0].Tracks[0].Title);
+        Assert.False(detail.Units[0].Tracks[0].IsCompletedByUser);
+    }
+
+    [Fact]
+    public async Task Get_UnpublishedExercise_Returns404()
+    {
+        var admin = AdminClient();
+        var (exerciseId, _) = await CreatePublishedExerciseWithOneTrackAsync(admin, "A1");
+        await admin.PatchAsJsonAsync($"/api/admin/exercises/{exerciseId}/publish-status", new { isPublished = false });
+
+        var response = await (await LearnerClientAsync()).GetAsync($"/api/learner/exercises/{exerciseId}");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Get_NonExistentExercise_Returns404()
+    {
+        var response = await (await LearnerClientAsync()).GetAsync($"/api/learner/exercises/{Guid.NewGuid()}");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
 }
