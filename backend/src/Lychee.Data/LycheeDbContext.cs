@@ -66,5 +66,9 @@ public class LycheeDbContext : IdentityDbContext<ApplicationUser, IdentityRole<G
         modelBuilder.Entity<Exercise>().Property(e => e.IsPublished).HasDefaultValue(true);
         modelBuilder.Entity<Unit>().Property(u => u.IsPublished).HasDefaultValue(true);
         modelBuilder.Entity<Track>().Property(t => t.IsPublished).HasDefaultValue(true);
+
+        modelBuilder.Entity<Track>()
+            .Property(t => t.Title)
+            .HasDefaultValue("Untitled Track");
     }
 }

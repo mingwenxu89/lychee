@@ -355,6 +355,12 @@ namespace Lychee.Data.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("Untitled Track");
+
                     b.Property<Guid>("UnitId")
                         .HasColumnType("uuid");
 

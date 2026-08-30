@@ -10,6 +10,7 @@ public class Track
     public TimeSpan Duration { get; set; }
     public string Level { get; set; } = null!;
     public bool IsPublished { get; set; } = true;
+    public string Title { get; set; } = null!;
     public List<Sentence> Sentences { get; set; } = new();
     public DateTime CreatedAt { get; set; }
 }
