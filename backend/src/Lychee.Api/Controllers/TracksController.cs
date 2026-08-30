@@ -18,7 +18,7 @@ public class CreateTrackRequest
 
 public record TrackResponse(Guid Id, Guid UnitId, string Title, string AudioUrl, string SrtUrl, TimeSpan Duration, string Level, bool IsPublished, int SentenceCount);
 
-public record UpdateTrackRequest(string Level);
+public record UpdateTrackRequest(string Title, string Level);
 // UpdatePublishStatusRequest is defined in ExercisesController.cs and shared (same namespace).
 
 [ApiController]
@@ -120,6 +120,7 @@ public class TracksController : ControllerBase
         var track = await _db.Tracks.Include(t => t.Sentences).FirstOrDefaultAsync(t => t.Id == id);
         if (track is null) return NotFound();
 
+        track.Title = request.Title;
         track.Level = request.Level;
         await _db.SaveChangesAsync();
         return Ok(await ToResponseAsync(track, track.Sentences.Count));

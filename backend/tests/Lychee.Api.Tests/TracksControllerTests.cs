@@ -58,6 +58,29 @@ public class TracksControllerTests : IClassFixture<LycheeWebApplicationFactory>
     }
 
     [Fact]
+    public async Task Update_ChangesTitleAndLevel()
+    {
+        var client = AdminClient();
+        var unitId = await CreateUnitAsync(client);
+
+        using var form = new MultipartFormDataContent();
+        form.Add(new ByteArrayContent(Encoding.UTF8.GetBytes("audio")), "AudioFile", "a.mp3");
+        form.Add(new StringContent("1\n00:00:00,000 --> 00:00:01,000\nHi.\n"), "SrtFile", "a.srt");
+        form.Add(new StringContent("A1"), "Level");
+        form.Add(new StringContent("Original Title"), "Title");
+        var createResponse = await client.PostAsync($"/api/admin/units/{unitId}/tracks", form);
+        var track = await createResponse.Content.ReadFromJsonAsync<TrackResponse>();
+
+        var updateResponse = await client.PutAsJsonAsync($"/api/admin/tracks/{track!.Id}",
+            new { title = "Updated Title", level = "B1" });
+
+        Assert.Equal(HttpStatusCode.OK, updateResponse.StatusCode);
+        var updated = await updateResponse.Content.ReadFromJsonAsync<TrackResponse>();
+        Assert.Equal("Updated Title", updated!.Title);
+        Assert.Equal("B1", updated.Level);
+    }
+
+    [Fact]
     public async Task Create_WithAudioAndSrt_GeneratesSentencesAndComputesDuration()
     {
         var client = AdminClient();
@@ -116,10 +139,12 @@ public class TracksControllerTests : IClassFixture<LycheeWebApplicationFactory>
         var createResponse = await client.PostAsync($"/api/admin/units/{unitId}/tracks", form);
         var track = await createResponse.Content.ReadFromJsonAsync<TrackResponse>();
 
-        var updateResponse = await client.PutAsJsonAsync($"/api/admin/tracks/{track!.Id}", new { level = "B1" });
+        var updateResponse = await client.PutAsJsonAsync($"/api/admin/tracks/{track!.Id}",
+            new { title = "Renamed Track", level = "B1" });
         Assert.Equal(HttpStatusCode.OK, updateResponse.StatusCode);
         var updated = await updateResponse.Content.ReadFromJsonAsync<TrackResponse>();
-        Assert.Equal("B1", updated!.Level);
+        Assert.Equal("Renamed Track", updated!.Title);
+        Assert.Equal("B1", updated.Level);
 
         var deleteResponse = await client.DeleteAsync($"/api/admin/tracks/{track.Id}");
         Assert.Equal(HttpStatusCode.NoContent, deleteResponse.StatusCode);
