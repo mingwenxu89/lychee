@@ -17,3 +17,7 @@ export function registerAccount(email: string, password: string): Promise<void> 
 export function loginAccount(email: string, password: string): Promise<void> {
   return postJson('/api/auth/login', { email, password })
 }
+
+export function changePassword(currentPassword: string, newPassword: string): Promise<void> {
+  return postJson('/api/auth/change-password', { currentPassword, newPassword })
+}

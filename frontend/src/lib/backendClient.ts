@@ -34,6 +34,18 @@ export async function loginUser(email: string, password: string): Promise<{ toke
   return response.json()
 }
 
+export async function changeUserPassword(token: string, currentPassword: string, newPassword: string): Promise<void> {
+  const response = await authenticatedFetch('/api/auth/change-password', token, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ currentPassword, newPassword })
+  })
+  if (!response.ok) {
+    const errors = await response.json().catch(() => [])
+    throw new BackendAuthError(response.status, Array.isArray(errors) ? errors.join(', ') : 'Failed to change password')
+  }
+}
+
 export async function authenticatedFetch(path: string, token: string, init?: RequestInit): Promise<Response> {
   return fetch(`${BACKEND_API_URL}${path}`, {
     ...init,

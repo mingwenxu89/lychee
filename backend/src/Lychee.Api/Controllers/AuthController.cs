@@ -12,6 +12,7 @@ namespace Lychee.Api.Controllers;
 public record RegisterRequest(string Email, string Password);
 public record LoginRequest(string Email, string Password);
 public record LoginResponse(string Token, DateTime ExpiresAtUtc);
+public record ChangePasswordRequest(string CurrentPassword, string NewPassword);
 
 [ApiController]
 [Route("api/auth")]
@@ -91,6 +92,22 @@ public class AuthController : ControllerBase
 
         var frontendBaseUrl = _configuration["FrontendBaseUrl"]!;
         return Redirect($"{frontendBaseUrl}/auth/callback?token={Uri.EscapeDataString(token)}");
+    }
+
+    [HttpPost("change-password")]
+    [Authorize]
+    public async Task<IActionResult> ChangePassword(ChangePasswordRequest request)
+    {
+        var user = await _userManager.FindByIdAsync(User.GetUserId().ToString());
+        if (user is null) return NotFound();
+
+        var result = await _userManager.ChangePasswordAsync(user, request.CurrentPassword, request.NewPassword);
+        if (!result.Succeeded)
+        {
+            return BadRequest(result.Errors.Select(e => e.Description));
+        }
+
+        return NoContent();
     }
 
     [HttpGet("me")]

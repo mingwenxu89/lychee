@@ -1,7 +1,9 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
+import { ChangePasswordModal } from './ChangePasswordModal'
 
 type NavBarProps = {
   rankLabel: string
@@ -17,7 +19,17 @@ const NAV_ITEMS: { label: string; href: string }[] = [
 
 export function NavBar({ rankLabel, activityDays, userInitial }: NavBarProps) {
   const pathname = usePathname()
+  const router = useRouter()
   const activityLightness = 30 + (activityDays / 7) * 55 // 30% (darkest) to 85% (brightest)
+  const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false)
+
+  async function handleLogout() {
+    setIsMenuOpen(false)
+    await fetch('/api/auth/logout', { method: 'POST' })
+    router.push('/login')
+    router.refresh()
+  }
 
   return (
     <div
@@ -68,22 +80,75 @@ export function NavBar({ rankLabel, activityDays, userInitial }: NavBarProps) {
         <svg width={18} height={18} viewBox="0 0 24 24" fill="none" aria-label={`${activityDays} of 7 active days`}>
           <circle cx={12} cy={14} r={8} fill={`oklch(${activityLightness}% 0.13 145)`} />
         </svg>
-        <div
-          style={{
-            width: 38,
-            height: 38,
-            borderRadius: 999,
-            background: 'var(--primary-soft)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontWeight: 800,
-            color: 'var(--primary-dark)'
-          }}
-        >
-          {userInitial ?? '?'}
+        <div style={{ position: 'relative' }}>
+          <button
+            type="button"
+            onClick={() => setIsMenuOpen((open) => !open)}
+            aria-label="Account menu"
+            aria-expanded={isMenuOpen}
+            style={{
+              width: 38,
+              height: 38,
+              borderRadius: 999,
+              background: 'var(--primary-soft)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontWeight: 800,
+              color: 'var(--primary-dark)',
+              border: 'none',
+              cursor: 'pointer'
+            }}
+          >
+            {userInitial ?? '?'}
+          </button>
+
+          {isMenuOpen && (
+            <>
+              <div
+                onClick={() => setIsMenuOpen(false)}
+                style={{ position: 'fixed', inset: 0, zIndex: 10 }}
+              />
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 46,
+                  right: 0,
+                  background: 'var(--surface)',
+                  border: '1px solid var(--line)',
+                  borderRadius: 12,
+                  boxShadow: '0 8px 24px oklch(22% 0.03 270 / 0.15)',
+                  minWidth: 160,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  overflow: 'hidden',
+                  zIndex: 11
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMenuOpen(false)
+                    setIsChangePasswordOpen(true)
+                  }}
+                  style={{ textAlign: 'left', padding: '10px 16px', border: 'none', background: 'none', cursor: 'pointer', fontSize: 14 }}
+                >
+                  Change Password
+                </button>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  style={{ textAlign: 'left', padding: '10px 16px', border: 'none', background: 'none', cursor: 'pointer', fontSize: 14 }}
+                >
+                  Log out
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </div>
+
+      {isChangePasswordOpen && <ChangePasswordModal onClose={() => setIsChangePasswordOpen(false)} />}
     </div>
   )
 }
