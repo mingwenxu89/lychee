@@ -14,11 +14,12 @@ public class CreateTrackRequest
     public IFormFile SrtFile { get; set; } = null!;
     public string Level { get; set; } = null!;
     public string Title { get; set; } = null!;
+    public string? Description { get; set; }
 }
 
-public record TrackResponse(Guid Id, Guid UnitId, string Title, string AudioUrl, string SrtUrl, TimeSpan Duration, string Level, bool IsPublished, int SentenceCount);
+public record TrackResponse(Guid Id, Guid UnitId, string Title, string? Description, string AudioUrl, string SrtUrl, TimeSpan Duration, string Level, bool IsPublished, int SentenceCount);
 
-public record UpdateTrackRequest(string Title, string Level);
+public record UpdateTrackRequest(string Title, string Level, string? Description);
 // UpdatePublishStatusRequest is defined in ExercisesController.cs and shared (same namespace).
 
 [ApiController]
@@ -38,7 +39,7 @@ public class TracksController : ControllerBase
     {
         var audioUrl = await ResolveReadUrlAsync(t.AudioFileUrl);
         var srtUrl = await ResolveReadUrlAsync(t.SrtFileUrl);
-        return new TrackResponse(t.Id, t.UnitId, t.Title, audioUrl, srtUrl, t.Duration, t.Level, t.IsPublished, sentenceCount);
+        return new TrackResponse(t.Id, t.UnitId, t.Title, t.Description, audioUrl, srtUrl, t.Duration, t.Level, t.IsPublished, sentenceCount);
     }
 
     private Task<string> ResolveReadUrlAsync(string storedPath)
@@ -97,6 +98,7 @@ public class TracksController : ControllerBase
             Duration = duration,
             Level = request.Level,
             Title = request.Title,
+            Description = request.Description,
             Sentences = cues.Select(c => new Sentence
             {
                 Id = Guid.NewGuid(),
@@ -122,6 +124,7 @@ public class TracksController : ControllerBase
 
         track.Title = request.Title;
         track.Level = request.Level;
+        track.Description = request.Description;
         await _db.SaveChangesAsync();
         return Ok(await ToResponseAsync(track, track.Sentences.Count));
     }

@@ -163,6 +163,32 @@ public class LearnerExercisesControllerTests : IClassFixture<LycheeWebApplicatio
     }
 
     [Fact]
+    public async Task Get_ReturnsDescriptionSentenceCountAndWordsPerMinute()
+    {
+        var admin = AdminClient();
+        var (exerciseId, unitId) = await CreatePublishedExerciseWithUnitAsync(admin);
+
+        using var form = new MultipartFormDataContent();
+        var audioContent = new ByteArrayContent(Encoding.UTF8.GetBytes("fake-audio"));
+        audioContent.Headers.ContentType = new MediaTypeHeaderValue("audio/mpeg");
+        form.Add(audioContent, "AudioFile", "track.mp3");
+        const string srt = "1\n00:00:00,000 --> 00:00:02,000\nI saw the first snowfall today\n\n2\n00:00:02,000 --> 00:00:05,000\nIt was truly magical\n";
+        form.Add(new StringContent(srt), "SrtFile", "track.srt");
+        form.Add(new StringContent("A1"), "Level");
+        form.Add(new StringContent("The First Snowfall"), "Title");
+        form.Add(new StringContent("A quiet story about an early winter morning."), "Description");
+        await admin.PostAsync($"/api/admin/units/{unitId}/tracks", form);
+
+        var response = await (await LearnerClientAsync()).GetAsync($"/api/learner/exercises/{exerciseId}");
+
+        var detail = await response.Content.ReadFromJsonAsync<LearnerExerciseDetailResponse>();
+        var track = detail!.Units.Single().Tracks.Single();
+        Assert.Equal("A quiet story about an early winter morning.", track.Description);
+        Assert.Equal(2, track.SentenceCount);
+        Assert.Equal(120, track.WordsPerMinute);
+    }
+
+    [Fact]
     public async Task Get_ReturnsTracksWithinUnitInCreationOrder()
     {
         var admin = AdminClient();

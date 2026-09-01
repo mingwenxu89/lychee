@@ -11,6 +11,7 @@ public class Track
     public string Level { get; set; } = null!;
     public bool IsPublished { get; set; } = true;
     public string Title { get; set; } = null!;
+    public string? Description { get; set; }
     public List<Sentence> Sentences { get; set; } = new();
     public DateTime CreatedAt { get; set; }
 }

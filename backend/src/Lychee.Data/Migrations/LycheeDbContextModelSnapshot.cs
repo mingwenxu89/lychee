@@ -339,6 +339,9 @@ namespace Lychee.Data.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasDefaultValueSql("now()");
 
+                    b.Property<string>("Description")
+                        .HasColumnType("text");
+
                     b.Property<TimeSpan>("Duration")
                         .HasColumnType("interval");
 

@@ -7,6 +7,7 @@ type Track = {
   id: string
   unitId: string
   title: string
+  description: string | null
   audioUrl: string
   srtUrl: string
   duration: string
@@ -19,6 +20,7 @@ export default function UnitDetailPage() {
   const { exerciseId, unitId } = useParams<{ exerciseId: string; unitId: string }>()
   const [tracks, setTracks] = useState<Track[]>([])
   const [title, setTitle] = useState('')
+  const [description, setDescription] = useState('')
   const [level, setLevel] = useState('A1')
   const [audioFile, setAudioFile] = useState<File | null>(null)
   const [srtFile, setSrtFile] = useState<File | null>(null)
@@ -50,6 +52,7 @@ export default function UnitDetailPage() {
     formData.append('SrtFile', srtFile)
     formData.append('Title', title)
     formData.append('Level', level)
+    formData.append('Description', description)
 
     const response = await fetch(`/api/admin/units/${unitId}/tracks`, { method: 'POST', body: formData })
     if (!response.ok) {
@@ -59,10 +62,11 @@ export default function UnitDetailPage() {
     setAudioFile(null)
     setSrtFile(null)
     setTitle('')
+    setDescription('')
     await loadTracks()
   }
 
-  function updateLocalTrackField(id: string, field: 'title' | 'level', value: string) {
+  function updateLocalTrackField(id: string, field: 'title' | 'level' | 'description', value: string) {
     setTracks((current) => current.map((t) => (t.id === id ? { ...t, [field]: value } : t)))
   }
 
@@ -73,7 +77,7 @@ export default function UnitDetailPage() {
       const response = await fetch(`/api/admin/tracks/${track.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: track.title, level: track.level })
+        body: JSON.stringify({ title: track.title, level: track.level, description: track.description })
       })
       if (!response.ok) {
         setSaveError(`Failed to save track ${track.title}`)
@@ -113,6 +117,10 @@ export default function UnitDetailPage() {
           <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Track title" required />
         </label>
         <label>
+          Description
+          <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Short description shown to learners" rows={3} />
+        </label>
+        <label>
           Level (CEFR)
           <input value={level} onChange={(e) => setLevel(e.target.value)} placeholder="A1" />
         </label>
@@ -136,6 +144,13 @@ export default function UnitDetailPage() {
               value={track.level}
               onChange={(e) => updateLocalTrackField(track.id, 'level', e.target.value)}
               style={{ width: 60 }}
+            />
+            <input
+              aria-label="Edit track description"
+              value={track.description ?? ''}
+              onChange={(e) => updateLocalTrackField(track.id, 'description', e.target.value)}
+              placeholder="Description"
+              style={{ width: 220 }}
             />
             <a href={`/admin/exercises/${exerciseId}/units/${unitId}/tracks/${track.id}`}>
               {track.sentenceCount} sentences

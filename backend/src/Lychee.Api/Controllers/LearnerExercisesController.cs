@@ -11,7 +11,9 @@ public record LearnerExerciseResponse(
     Guid Id, string Title, string Category, string? DifficultyRangeLabel,
     int TrackCount, int CompletedTrackCount, DateTime? LastPracticedAt);
 
-public record LearnerExerciseTrackResponse(Guid Id, string Title, string Level, TimeSpan Duration, bool IsCompletedByUser);
+public record LearnerExerciseTrackResponse(
+    Guid Id, string Title, string? Description, string Level, TimeSpan Duration,
+    int SentenceCount, int WordsPerMinute, bool IsCompletedByUser);
 public record LearnerExerciseUnitResponse(Guid Id, string Title, int Order, List<LearnerExerciseTrackResponse> Tracks);
 public record LearnerExerciseDetailResponse(Guid Id, string Title, string? Description, string Category, List<LearnerExerciseUnitResponse> Units);
 
@@ -83,6 +85,7 @@ public class LearnerExercisesController : ControllerBase
             .Where(e => e.Id == id && e.IsPublished)
             .Include(e => e.Units.Where(u => u.IsPublished))
                 .ThenInclude(u => u.Tracks.Where(t => t.IsPublished))
+                    .ThenInclude(t => t.Sentences)
             .FirstOrDefaultAsync();
         if (exercise is null) return NotFound();
 
@@ -99,9 +102,18 @@ public class LearnerExercisesController : ControllerBase
             .Select(u => new LearnerExerciseUnitResponse(
                 u.Id, u.Title, u.Order,
                 u.Tracks.OrderBy(t => t.CreatedAt).Select(t => new LearnerExerciseTrackResponse(
-                    t.Id, t.Title, t.Level, t.Duration, completedSet.Contains(t.Id))).ToList()))
+                    t.Id, t.Title, t.Description, t.Level, t.Duration,
+                    t.Sentences.Count, ComputeWordsPerMinute(t), completedSet.Contains(t.Id))).ToList()))
             .ToList();
 
         return Ok(new LearnerExerciseDetailResponse(exercise.Id, exercise.Title, exercise.Description, exercise.Category, units));
+    }
+
+    private static int ComputeWordsPerMinute(Track track)
+    {
+        if (track.Duration <= TimeSpan.Zero) return 0;
+
+        var wordCount = track.Sentences.Sum(s => s.Text.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length);
+        return (int)Math.Round(wordCount / track.Duration.TotalMinutes);
     }
 }

@@ -58,6 +58,67 @@ public class TracksControllerTests : IClassFixture<LycheeWebApplicationFactory>
     }
 
     [Fact]
+    public async Task Create_WithDescription_ReturnsDescriptionInResponse()
+    {
+        var client = AdminClient();
+        var unitId = await CreateUnitAsync(client);
+
+        using var form = new MultipartFormDataContent();
+        form.Add(new ByteArrayContent(Encoding.UTF8.GetBytes("fake-audio")), "AudioFile", "track.mp3");
+        form.Add(new StringContent("1\n00:00:00,000 --> 00:00:01,000\nHi.\n"), "SrtFile", "track.srt");
+        form.Add(new StringContent("A1"), "Level");
+        form.Add(new StringContent("The First Snowfall"), "Title");
+        form.Add(new StringContent("A quiet story about an early winter morning."), "Description");
+
+        var response = await client.PostAsync($"/api/admin/units/{unitId}/tracks", form);
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var track = await response.Content.ReadFromJsonAsync<TrackResponse>();
+        Assert.Equal("A quiet story about an early winter morning.", track!.Description);
+    }
+
+    [Fact]
+    public async Task Create_WithoutDescription_ReturnsNullDescription()
+    {
+        var client = AdminClient();
+        var unitId = await CreateUnitAsync(client);
+
+        using var form = new MultipartFormDataContent();
+        form.Add(new ByteArrayContent(Encoding.UTF8.GetBytes("fake-audio")), "AudioFile", "track.mp3");
+        form.Add(new StringContent("1\n00:00:00,000 --> 00:00:01,000\nHi.\n"), "SrtFile", "track.srt");
+        form.Add(new StringContent("A1"), "Level");
+        form.Add(new StringContent("No Description Track"), "Title");
+
+        var response = await client.PostAsync($"/api/admin/units/{unitId}/tracks", form);
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var track = await response.Content.ReadFromJsonAsync<TrackResponse>();
+        Assert.Null(track!.Description);
+    }
+
+    [Fact]
+    public async Task Update_ChangesDescription()
+    {
+        var client = AdminClient();
+        var unitId = await CreateUnitAsync(client);
+
+        using var form = new MultipartFormDataContent();
+        form.Add(new ByteArrayContent(Encoding.UTF8.GetBytes("audio")), "AudioFile", "a.mp3");
+        form.Add(new StringContent("1\n00:00:00,000 --> 00:00:01,000\nHi.\n"), "SrtFile", "a.srt");
+        form.Add(new StringContent("A1"), "Level");
+        form.Add(new StringContent("Original Title"), "Title");
+        var createResponse = await client.PostAsync($"/api/admin/units/{unitId}/tracks", form);
+        var track = await createResponse.Content.ReadFromJsonAsync<TrackResponse>();
+
+        var updateResponse = await client.PutAsJsonAsync($"/api/admin/tracks/{track!.Id}",
+            new { title = "Updated Title", level = "B1", description = "A new description." });
+
+        Assert.Equal(HttpStatusCode.OK, updateResponse.StatusCode);
+        var updated = await updateResponse.Content.ReadFromJsonAsync<TrackResponse>();
+        Assert.Equal("A new description.", updated!.Description);
+    }
+
+    [Fact]
     public async Task Update_ChangesTitleAndLevel()
     {
         var client = AdminClient();
@@ -155,5 +216,5 @@ public class TracksControllerTests : IClassFixture<LycheeWebApplicationFactory>
     }
 
     private record IdOnly(Guid Id);
-    private record TrackResponse(Guid Id, Guid UnitId, string Title, string AudioUrl, string SrtUrl, TimeSpan Duration, string Level, bool IsPublished, int SentenceCount);
+    private record TrackResponse(Guid Id, Guid UnitId, string Title, string? Description, string AudioUrl, string SrtUrl, TimeSpan Duration, string Level, bool IsPublished, int SentenceCount);
 }
