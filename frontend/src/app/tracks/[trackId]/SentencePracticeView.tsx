@@ -385,11 +385,28 @@ export function SentencePracticeView({
               }}
             />
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-              {result && result.isCorrect ? (
-                <span />
-              ) : (
-                <button onClick={handleSubmit} disabled={!isReady} style={{ ...btnPrimarySmall, opacity: isReady ? 1 : 0.5 }}>Check</button>
-              )}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                {result && result.isCorrect ? (
+                  <button
+                    onClick={() => session && handleAdvance(session.currentSentenceIndex + 1)}
+                    disabled={!isReady}
+                    style={btnPrimary}
+                  >
+                    Next
+                  </button>
+                ) : (
+                  <>
+                    <button onClick={handleSubmit} disabled={!isReady} style={{ ...btnPrimarySmall, opacity: isReady ? 1 : 0.5 }}>Check</button>
+                    <button
+                      onClick={() => session && handleAdvance(session.currentSentenceIndex + 1)}
+                      disabled={!isReady}
+                      style={{ ...btnGhostSmall, opacity: isReady ? 1 : 0.5 }}
+                    >
+                      Skip
+                    </button>
+                  </>
+                )}
+              </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <button
                   onClick={() => setResult(null)}
@@ -483,25 +500,6 @@ export function SentencePracticeView({
             </div>
           )}
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            {result && result.isCorrect ? (
-              <button
-                onClick={() => session && handleAdvance(session.currentSentenceIndex + 1)}
-                disabled={!isReady}
-                style={btnPrimary}
-              >
-                Next
-              </button>
-            ) : (
-              <button
-                onClick={() => session && handleAdvance(session.currentSentenceIndex + 1)}
-                disabled={!isReady}
-                style={{ ...btnGhostSmall, opacity: isReady ? 1 : 0.5 }}
-              >
-                Skip
-              </button>
-            )}
-          </div>
         </div>
       </div>
 
