@@ -379,7 +379,9 @@ export function SentencePracticeView({
                   🎤
                 </button>
               )}
-              <button onClick={handleSubmit} disabled={!isReady} style={{ ...btnPrimary, boxShadow: 'none', opacity: isReady ? 1 : 0.5 }}>Submit</button>
+              {result && !result.isCorrect && (
+                <button onClick={() => setResult(null)} style={{ ...btnPrimary, boxShadow: 'none' }}>Try Again</button>
+              )}
             </div>
             <span style={{ fontSize: 12, color: 'var(--ink-faint)', fontWeight: 600, paddingLeft: 2 }}>
               Type your answer, or tap the mic to speak it instead
@@ -416,9 +418,6 @@ export function SentencePracticeView({
           )}
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            {result && !result.isCorrect && (
-              <button onClick={() => setResult(null)} style={btnPrimary}>Try Again</button>
-            )}
             {result && result.isCorrect ? (
               <button
                 onClick={() => session && handleAdvance(session.currentSentenceIndex + 1)}

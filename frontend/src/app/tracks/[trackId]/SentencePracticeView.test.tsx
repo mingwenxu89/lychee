@@ -35,7 +35,7 @@ beforeEach(() => {
 })
 
 describe('SentencePracticeView', () => {
-  it('pre-downloads audio and starts the session before enabling submission', async () => {
+  it('pre-downloads audio and starts the session before enabling checking', async () => {
     mockFetchSequence([
       new Response(new Blob(['audio-bytes']), { status: 200 }),
       new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 })
@@ -43,11 +43,11 @@ describe('SentencePracticeView', () => {
 
     render(<SentencePracticeView track={track} initialSentenceIndex={null} onCompleted={vi.fn()} />)
 
-    expect(screen.getByRole('button', { name: /submit/i })).toBeDisabled()
-    await waitFor(() => expect(screen.getByRole('button', { name: /submit/i })).not.toBeDisabled())
+    expect(screen.getByRole('button', { name: /^check$/i })).toBeDisabled()
+    await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
   })
 
-  it('submits the typed answer and shows the diff result', async () => {
+  it('Check submits the typed answer and shows the diff result', async () => {
     mockFetchSequence([
       new Response(new Blob(['audio-bytes']), { status: 200 }),
       new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 }),
@@ -55,10 +55,10 @@ describe('SentencePracticeView', () => {
     ])
 
     render(<SentencePracticeView track={track} initialSentenceIndex={null} onCompleted={vi.fn()} />)
-    await waitFor(() => expect(screen.getByRole('button', { name: /submit/i })).not.toBeDisabled())
+    await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
 
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Hello there.' } })
-    fireEvent.click(screen.getByRole('button', { name: /submit/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^check$/i }))
 
     expect(await screen.findByText('Hello')).toBeInTheDocument()
     expect(fetch).toHaveBeenLastCalledWith('/api/learner/practice-sessions/session-1/submit', expect.objectContaining({
@@ -76,7 +76,7 @@ describe('SentencePracticeView', () => {
     ])
 
     render(<SentencePracticeView track={track} initialSentenceIndex={null} onCompleted={onCompleted} />)
-    await waitFor(() => expect(screen.getByRole('button', { name: /submit/i })).not.toBeDisabled())
+    await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
 
     fireEvent.click(screen.getByRole('button', { name: /^skip$/i }))
 
@@ -92,10 +92,10 @@ describe('SentencePracticeView', () => {
     ])
 
     render(<SentencePracticeView track={track} initialSentenceIndex={null} onCompleted={vi.fn()} />)
-    await waitFor(() => expect(screen.getByRole('button', { name: /submit/i })).not.toBeDisabled())
+    await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
 
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Hello there.' } })
-    fireEvent.click(screen.getByRole('button', { name: /submit/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^check$/i }))
     await screen.findByText('Hello')
 
     fireEvent.click(screen.getByRole('button', { name: /^next$/i }))
@@ -103,6 +103,31 @@ describe('SentencePracticeView', () => {
     await waitFor(() => expect(fetch).toHaveBeenLastCalledWith('/api/learner/practice-sessions/session-1/advance', expect.objectContaining({
       body: JSON.stringify({ toIndex: 1 })
     })))
+  })
+
+  it('Try Again appears where Check used to be replaced after a wrong submission, and clears the result', async () => {
+    mockFetchSequence([
+      new Response(new Blob(['audio-bytes']), { status: 200 }),
+      new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 }),
+      new Response(JSON.stringify({ accuracyScore: 0, isCorrect: false, words: [{ word: 'Hello', status: 'Incorrect' }] }), { status: 200 })
+    ])
+
+    render(<SentencePracticeView track={track} initialSentenceIndex={null} onCompleted={vi.fn()} />)
+    await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Wrong answer' } })
+    fireEvent.click(screen.getByRole('button', { name: /^check$/i }))
+    await screen.findByText(/so close/i)
+
+    const tryAgain = screen.getByRole('button', { name: /^try again$/i })
+    expect(tryAgain).toBeInTheDocument()
+    // Check and Skip remain available at the bottom alongside Try Again.
+    expect(screen.getByRole('button', { name: /^check$/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^skip$/i })).toBeInTheDocument()
+
+    fireEvent.click(tryAgain)
+
+    await waitFor(() => expect(screen.queryByText(/so close/i)).not.toBeInTheDocument())
   })
 
   it('jumps to a clicked sentence in the list', async () => {
@@ -113,7 +138,7 @@ describe('SentencePracticeView', () => {
     ])
 
     render(<SentencePracticeView track={track} initialSentenceIndex={null} onCompleted={vi.fn()} />)
-    await waitFor(() => expect(screen.getByRole('button', { name: /submit/i })).not.toBeDisabled())
+    await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
 
     fireEvent.click(screen.getByText('2'))
 
@@ -122,7 +147,7 @@ describe('SentencePracticeView', () => {
     })))
   })
 
-  it('shows an inline error and keeps the typed answer when submit fails', async () => {
+  it('shows an inline error and keeps the typed answer when checking fails', async () => {
     mockFetchSequence([
       new Response(new Blob(['audio-bytes']), { status: 200 }),
       new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 }),
@@ -130,10 +155,10 @@ describe('SentencePracticeView', () => {
     ])
 
     render(<SentencePracticeView track={track} initialSentenceIndex={null} onCompleted={vi.fn()} />)
-    await waitFor(() => expect(screen.getByRole('button', { name: /submit/i })).not.toBeDisabled())
+    await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
 
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Hello there.' } })
-    fireEvent.click(screen.getByRole('button', { name: /submit/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^check$/i }))
 
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/failed to submit/i))
     expect(screen.getByRole('textbox')).toHaveValue('Hello there.')
@@ -147,7 +172,7 @@ describe('SentencePracticeView', () => {
     ])
 
     render(<SentencePracticeView track={track} initialSentenceIndex={null} onCompleted={vi.fn()} />)
-    await waitFor(() => expect(screen.getByRole('button', { name: /submit/i })).not.toBeDisabled())
+    await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
 
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'my draft answer' } })
     fireEvent.click(screen.getByRole('button', { name: /^skip$/i }))
@@ -163,7 +188,7 @@ describe('SentencePracticeView', () => {
     ])
 
     const { container } = render(<SentencePracticeView track={track} initialSentenceIndex={null} onCompleted={vi.fn()} />)
-    await waitFor(() => expect(screen.getByRole('button', { name: /submit/i })).not.toBeDisabled())
+    await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
 
     const audio = container.querySelector('audio')!
     expect(screen.getByRole('button', { name: /^play$/i })).toBeInTheDocument()
@@ -185,7 +210,7 @@ describe('SentencePracticeView', () => {
     ])
 
     render(<SentencePracticeView track={track} initialSentenceIndex={null} onCompleted={vi.fn()} />)
-    await waitFor(() => expect(screen.getByRole('button', { name: /submit/i })).not.toBeDisabled())
+    await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
 
     fireEvent.click(screen.getByRole('button', { name: /previous sentence/i }))
 
@@ -201,7 +226,7 @@ describe('SentencePracticeView', () => {
     ])
 
     render(<SentencePracticeView track={track} initialSentenceIndex={null} onCompleted={vi.fn()} />)
-    await waitFor(() => expect(screen.getByRole('button', { name: /submit/i })).not.toBeDisabled())
+    await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
 
     expect(screen.getByRole('button', { name: /previous sentence/i })).toBeDisabled()
   })
@@ -214,7 +239,7 @@ describe('SentencePracticeView', () => {
     ])
 
     render(<SentencePracticeView track={track} initialSentenceIndex={null} onCompleted={vi.fn()} />)
-    await waitFor(() => expect(screen.getByRole('button', { name: /submit/i })).not.toBeDisabled())
+    await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
 
     fireEvent.click(screen.getByRole('button', { name: /next sentence/i }))
 
@@ -230,31 +255,11 @@ describe('SentencePracticeView', () => {
     ])
 
     render(<SentencePracticeView track={track} initialSentenceIndex={null} onCompleted={vi.fn()} />)
-    await waitFor(() => expect(screen.getByRole('button', { name: /submit/i })).not.toBeDisabled())
+    await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
 
     const field = screen.getByRole('textbox')
     expect(field.tagName).toBe('TEXTAREA')
     expect(field).toHaveAttribute('rows', '3')
-  })
-
-  it('Check submits the answer just like Submit', async () => {
-    mockFetchSequence([
-      new Response(new Blob(['audio-bytes']), { status: 200 }),
-      new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 }),
-      new Response(JSON.stringify({ accuracyScore: 1, isCorrect: true, words: [{ word: 'Hello', status: 'Correct' }] }), { status: 200 })
-    ])
-
-    render(<SentencePracticeView track={track} initialSentenceIndex={null} onCompleted={vi.fn()} />)
-    await waitFor(() => expect(screen.getByRole('button', { name: /submit/i })).not.toBeDisabled())
-
-    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Hello there.' } })
-    fireEvent.click(screen.getByRole('button', { name: /^check$/i }))
-
-    expect(await screen.findByText('Hello')).toBeInTheDocument()
-    expect(fetch).toHaveBeenLastCalledWith('/api/learner/practice-sessions/session-1/submit', expect.objectContaining({
-      method: 'POST',
-      body: JSON.stringify({ sentenceId: 's1', submittedText: 'Hello there.' })
-    }))
   })
 
   it('when initialSentenceIndex is provided, advances there immediately instead of resuming', async () => {
