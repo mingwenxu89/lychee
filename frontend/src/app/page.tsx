@@ -82,14 +82,6 @@ export default function ExercisesPage() {
     return Array.from(new Set(exercises.map((e) => e.category)))
   }, [exercises])
 
-  const recentlyPracticed = useMemo(() => {
-    if (!exercises) return []
-    return exercises
-      .filter((e) => e.lastPracticedAt !== null)
-      .sort((a, b) => new Date(b.lastPracticedAt!).getTime() - new Date(a.lastPracticedAt!).getTime())
-      .slice(0, 5)
-  }, [exercises])
-
   const filtered = useMemo(() => {
     if (!exercises) return []
     return exercises.filter((e) => {
@@ -144,17 +136,6 @@ export default function ExercisesPage() {
           </button>
         ))}
       </div>
-
-      {recentlyPracticed.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <span style={{ fontWeight: 800, fontSize: 14, color: 'var(--ink-faint)' }}>Recently Practiced</span>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 24 }}>
-            {recentlyPracticed.map((exercise) => (
-              <ExerciseCard key={exercise.id} exercise={exercise} accent={colorForCategory(exercise.category, categories)} />
-            ))}
-          </div>
-        </div>
-      )}
 
       <div data-testid="exercise-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 24 }}>
         {filtered.map((exercise) => (
