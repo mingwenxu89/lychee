@@ -101,9 +101,9 @@ function TrackPageContent() {
   return (
     <main style={{ padding: '36px 40px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18 }}>
       <div style={{ alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: 6, color: 'var(--ink-faint)', fontSize: 15, fontWeight: 700 }}>
-        <Link href="/" style={{ color: 'inherit', textDecoration: 'none' }}>Home</Link>
+        <Link href="/" style={{ color: 'oklch(55% 0.2 250)', textDecoration: 'none' }}>Home</Link>
         <span>/</span>
-        <Link href={`/exercises/${track.exerciseId}`} style={{ color: 'inherit', textDecoration: 'none' }}>{track.exerciseTitle}</Link>
+        <Link href={`/exercises/${track.exerciseId}`} style={{ color: 'oklch(55% 0.2 250)', textDecoration: 'none' }}>{track.exerciseTitle}</Link>
         <span>/</span>
         <span style={{ color: 'var(--ink-soft)' }}>{track.title}</span>
       </div>
