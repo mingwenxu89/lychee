@@ -282,7 +282,7 @@ export function SentencePracticeView({
                 height: 52,
                 borderRadius: 999,
                 background: 'var(--primary)',
-                boxShadow: '0 4px 0 var(--primary-dark)',
+                boxShadow: 'none',
                 border: 'none',
                 display: 'flex',
                 alignItems: 'center',
@@ -379,7 +379,7 @@ export function SentencePracticeView({
                   🎤
                 </button>
               )}
-              <button onClick={handleSubmit} disabled={!isReady} style={{ ...btnPrimary, opacity: isReady ? 1 : 0.5 }}>Submit</button>
+              <button onClick={handleSubmit} disabled={!isReady} style={{ ...btnPrimary, boxShadow: 'none', opacity: isReady ? 1 : 0.5 }}>Submit</button>
             </div>
             <span style={{ fontSize: 12, color: 'var(--ink-faint)', fontWeight: 600, paddingLeft: 2 }}>
               Type your answer, or tap the mic to speak it instead
@@ -429,7 +429,7 @@ export function SentencePracticeView({
               </button>
             ) : (
               <>
-                <button onClick={handleSubmit} disabled={!isReady} style={{ ...btnPrimary, opacity: isReady ? 1 : 0.5 }}>Check</button>
+                <button onClick={handleSubmit} disabled={!isReady} style={{ ...btnPrimary, boxShadow: 'none', opacity: isReady ? 1 : 0.5 }}>Check</button>
                 <button
                   onClick={() => session && handleAdvance(session.currentSentenceIndex + 1)}
                   disabled={!isReady}
