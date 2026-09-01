@@ -76,7 +76,7 @@ export default function ExerciseDetailPage() {
   if (!detail) return <main style={{ padding: 40, color: 'var(--ink-soft)', fontWeight: 700 }}>Loading...</main>
 
   return (
-    <main style={{ padding: '36px 40px', display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 820, margin: '0 auto' }}>
+    <main style={{ padding: '36px 40px', display: 'flex', flexDirection: 'column', gap: 24 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 15, fontWeight: 700 }}>
         <Link href="/" style={{ color: 'oklch(55% 0.2 250)', textDecoration: 'none' }}>Home</Link>
         <span style={{ color: 'var(--ink-faint)' }}>/</span>
@@ -115,34 +115,34 @@ export default function ExerciseDetailPage() {
             </button>
 
             {isExpanded && (
-              <div style={{ borderTop: '1px solid var(--line)' }}>
-                {unit.tracks.map((track, index) => (
+              <div style={{ borderTop: '1px solid var(--line)', padding: 20, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+                {unit.tracks.map((track) => (
                   <Link
                     key={track.id}
                     href={`/tracks/${track.id}`}
                     style={{
                       display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: 16,
-                      padding: '14px 20px',
+                      flexDirection: 'column',
+                      gap: 6,
+                      padding: '14px 16px',
+                      borderRadius: 12,
+                      border: track.isCompletedByUser ? '1px solid oklch(80% 0.08 20)' : '1px solid var(--line)',
                       textDecoration: 'none',
                       color: 'inherit',
-                      background: track.isCompletedByUser ? 'oklch(95% 0.04 20)' : 'transparent',
-                      borderLeft: track.isCompletedByUser ? '4px solid oklch(80% 0.08 20)' : '4px solid transparent',
-                      borderTop: index > 0 ? '1px solid var(--line)' : 'none'
+                      background: track.isCompletedByUser ? 'oklch(95% 0.04 20)' : 'var(--surface)',
+                      minWidth: 0
                     }}
                   >
-                    <div style={{ minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
                       <div style={{ fontWeight: 700, fontSize: 14 }}>{track.title}</div>
-                      {track.description && (
-                        <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 2 }}>{track.description}</div>
-                      )}
-                      <div style={{ fontSize: 12, color: 'var(--ink-faint)', marginTop: 4 }}>
-                        {track.sentenceCount} sentences &middot; {track.wordsPerMinute} wpm
-                      </div>
+                      <span style={{ flexShrink: 0, color: 'var(--ink-faint)', fontSize: 12, fontWeight: 700 }}>{track.level}</span>
                     </div>
-                    <span style={{ flexShrink: 0, color: 'var(--ink-faint)', fontSize: 13, fontWeight: 700 }}>{track.level}</span>
+                    {track.description && (
+                      <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>{track.description}</div>
+                    )}
+                    <div style={{ fontSize: 12, color: 'var(--ink-faint)' }}>
+                      {track.sentenceCount} sentences &middot; {track.wordsPerMinute} wpm
+                    </div>
                   </Link>
                 ))}
               </div>

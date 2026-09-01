@@ -86,6 +86,6 @@ describe('ExerciseDetailPage', () => {
     const completedRow = screen.getByText('The First Snowfall').closest('a')
     const incompleteRow = screen.getByText('At the Coffee Shop').closest('a')
     expect(completedRow).toHaveStyle({ background: 'oklch(95% 0.04 20)' })
-    expect(incompleteRow).toHaveStyle({ background: 'transparent' })
+    expect(incompleteRow).toHaveStyle({ background: 'var(--surface)' })
   })
 })
