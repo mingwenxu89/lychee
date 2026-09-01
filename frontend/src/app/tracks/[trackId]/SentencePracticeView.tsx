@@ -380,6 +380,30 @@ export function SentencePracticeView({
               <span style={{ fontSize: 12, color: 'var(--ink-faint)', fontWeight: 600, paddingLeft: 2 }}>
                 Type your answer, or tap the mic to speak it instead
               </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                {result && !result.isCorrect && (
+                  <button
+                    onClick={() => setResult(null)}
+                    aria-label="Try again"
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 999,
+                      background: 'transparent',
+                      border: '2px solid var(--line)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--ink-soft)" strokeWidth="2.5">
+                      <path d="M3 12a9 9 0 1 0 3-6.7" strokeLinecap="round" />
+                      <path d="M3 4v5h5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                )}
               {isSpeechRecognitionSupported() && (
                 <button
                   onClick={handleMicClick}
@@ -416,6 +440,7 @@ export function SentencePracticeView({
                   )}
                 </button>
               )}
+              </div>
             </div>
           </div>
 
@@ -459,29 +484,6 @@ export function SentencePracticeView({
               </button>
             ) : (
               <>
-                {result && !result.isCorrect && (
-                  <button
-                    onClick={() => setResult(null)}
-                    aria-label="Try again"
-                    style={{
-                      width: 40,
-                      height: 40,
-                      borderRadius: 999,
-                      background: 'transparent',
-                      border: '2px solid var(--line)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      flexShrink: 0,
-                      cursor: 'pointer'
-                    }}
-                  >
-                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--ink-soft)" strokeWidth="2.5">
-                      <path d="M3 12a9 9 0 1 0 3-6.7" strokeLinecap="round" />
-                      <path d="M3 4v5h5" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </button>
-                )}
                 <button onClick={handleSubmit} disabled={!isReady} style={{ ...btnPrimarySmall, opacity: isReady ? 1 : 0.5 }}>Check</button>
                 <button
                   onClick={() => session && handleAdvance(session.currentSentenceIndex + 1)}

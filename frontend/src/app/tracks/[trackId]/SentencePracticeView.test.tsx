@@ -105,7 +105,7 @@ describe('SentencePracticeView', () => {
     })))
   })
 
-  it('Try Again appears where Check used to be replaced after a wrong submission, and clears the result', async () => {
+  it('Try Again appears to the left of the mic button after a wrong submission, and clears the result', async () => {
     mockFetchSequence([
       new Response(new Blob(['audio-bytes']), { status: 200 }),
       new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 }),
@@ -114,6 +114,8 @@ describe('SentencePracticeView', () => {
 
     render(<SentencePracticeView track={track} initialSentenceIndex={null} onCompleted={vi.fn()} />)
     await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
+
+    expect(screen.queryByRole('button', { name: /^try again$/i })).not.toBeInTheDocument()
 
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Wrong answer' } })
     fireEvent.click(screen.getByRole('button', { name: /^check$/i }))
@@ -294,6 +296,39 @@ describe('SentencePracticeView', () => {
     fakeInstance!.onend!()
 
     await waitFor(() => expect(screen.queryByLabelText('Recording')).not.toBeInTheDocument())
+
+    vi.unstubAllGlobals()
+  })
+
+  it('positions Try Again to the left of the mic button after a wrong submission', async () => {
+    class FakeSpeechRecognition {
+      continuous = false
+      interimResults = false
+      onresult: ((event: unknown) => void) | null = null
+      onend: (() => void) | null = null
+      start = vi.fn()
+      stop = vi.fn()
+    }
+    vi.stubGlobal('SpeechRecognition', vi.fn().mockImplementation(function (this: unknown) {
+      return new FakeSpeechRecognition()
+    }))
+
+    mockFetchSequence([
+      new Response(new Blob(['audio-bytes']), { status: 200 }),
+      new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 }),
+      new Response(JSON.stringify({ accuracyScore: 0, isCorrect: false, words: [{ word: 'Hello', status: 'Incorrect' }] }), { status: 200 })
+    ])
+
+    render(<SentencePracticeView track={track} initialSentenceIndex={null} onCompleted={vi.fn()} />)
+    await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Wrong answer' } })
+    fireEvent.click(screen.getByRole('button', { name: /^check$/i }))
+    await screen.findByText(/so close/i)
+
+    const tryAgain = screen.getByRole('button', { name: /^try again$/i })
+    const mic = screen.getByRole('button', { name: /use microphone/i })
+    expect(tryAgain.compareDocumentPosition(mic) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
 
     vi.unstubAllGlobals()
   })
