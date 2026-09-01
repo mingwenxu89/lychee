@@ -39,4 +39,18 @@ describe('DiffText', () => {
     expect(screen.getByText('the')).toHaveStyle({ color: 'var(--ink)' })
     expect(screen.queryByText('extra')).not.toBeInTheDocument()
   })
+
+  it('separates words with a real space character so the text is copyable, not just visually spaced by CSS', () => {
+    const { container } = render(
+      <DiffText
+        words={[
+          { word: 'I', status: 'Correct' },
+          { word: 'saw', status: 'Correct' },
+          { word: 'snow', status: 'Correct' }
+        ]}
+      />
+    )
+
+    expect(container.textContent).toBe('I saw snow')
+  })
 })

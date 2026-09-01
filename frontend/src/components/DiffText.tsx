@@ -43,8 +43,12 @@ export function DiffText({ words, variant = 'default' }: { words: WordDiff[]; va
   return (
     <span>
       {visibleWords.map((w, i) => (
-        <span key={i} data-status={w.status} style={{ ...styleFor(w.status), marginRight: 6 }}>
-          {w.word}
+        // The gap between words is a real space character, not CSS margin, so
+        // selecting and copying this text reproduces actual spaces rather than
+        // running every word together.
+        <span key={i}>
+          <span data-status={w.status} style={styleFor(w.status)}>{w.word}</span>
+          {i < visibleWords.length - 1 ? ' ' : ''}
         </span>
       ))}
     </span>
