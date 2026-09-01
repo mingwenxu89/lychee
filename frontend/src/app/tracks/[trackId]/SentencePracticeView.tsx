@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { preloadAudio } from '@/lib/audioPreload'
 import { parseTimeSpanToSeconds } from '@/lib/timeSpan'
-import { isSpeechRecognitionSupported, createSingleUtteranceRecognizer } from '@/lib/speechRecognition'
+import { isSpeechRecognitionSupported, createContinuousRecognizer } from '@/lib/speechRecognition'
 import { DiffText, type WordDiff } from '@/components/DiffText'
 import type { LearnerTrack } from './page'
 
@@ -89,6 +89,7 @@ export function SentencePracticeView({
   const [isRecording, setIsRecording] = useState(false)
   const audioRef = useRef<HTMLAudioElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const recognizerRef = useRef<{ start: () => void; stop: () => void } | null>(null)
 
   useEffect(() => {
     async function init() {
@@ -219,10 +220,15 @@ export function SentencePracticeView({
   }
 
   function handleMicClick() {
-    const recognizer = createSingleUtteranceRecognizer(
+    if (isRecording) {
+      recognizerRef.current?.stop()
+      return
+    }
+    const recognizer = createContinuousRecognizer(
       (text) => setAnswer(text),
       () => setIsRecording(false)
     )
+    recognizerRef.current = recognizer
     setIsRecording(true)
     recognizer.start()
   }
@@ -407,7 +413,7 @@ export function SentencePracticeView({
               {isSpeechRecognitionSupported() && (
                 <button
                   onClick={handleMicClick}
-                  aria-label="Use microphone"
+                  aria-label={isRecording ? 'Stop microphone' : 'Use microphone'}
                   disabled={!isReady}
                   style={{
                     position: 'relative',

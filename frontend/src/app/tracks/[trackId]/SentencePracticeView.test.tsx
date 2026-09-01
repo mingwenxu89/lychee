@@ -292,10 +292,16 @@ describe('SentencePracticeView', () => {
     fireEvent.click(screen.getByRole('button', { name: /use microphone/i }))
 
     expect(screen.getByLabelText('Recording')).toBeInTheDocument()
+    expect(fakeInstance!.continuous).toBe(true)
+
+    const stopButton = screen.getByRole('button', { name: /stop microphone/i })
+    fireEvent.click(stopButton)
+    expect(fakeInstance!.stop).toHaveBeenCalled()
 
     fakeInstance!.onend!()
 
     await waitFor(() => expect(screen.queryByLabelText('Recording')).not.toBeInTheDocument())
+    expect(screen.getByRole('button', { name: /use microphone/i })).toBeInTheDocument()
 
     vi.unstubAllGlobals()
   })

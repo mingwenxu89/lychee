@@ -43,7 +43,7 @@ export function createSingleUtteranceRecognizer(onResult: (text: string) => void
   }
 }
 
-export function createContinuousRecognizer(onTranscriptUpdate: (text: string) => void) {
+export function createContinuousRecognizer(onTranscriptUpdate: (text: string) => void, onEnd?: () => void) {
   const Constructor = getSpeechRecognitionConstructor()
   if (!Constructor) {
     return { start: () => {}, stop: () => {} }
@@ -57,6 +57,9 @@ export function createContinuousRecognizer(onTranscriptUpdate: (text: string) =>
       fullTranscript += (fullTranscript ? ' ' : '') + event.results[i][0].transcript
     }
     onTranscriptUpdate(fullTranscript)
+  }
+  if (onEnd) {
+    recognition.onend = onEnd
   }
 
   return {

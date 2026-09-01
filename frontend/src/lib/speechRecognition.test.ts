@@ -94,6 +94,16 @@ describe('createContinuousRecognizer', () => {
     expect(onTranscriptUpdate).toHaveBeenCalledWith('I saw the snowfall')
   })
 
+  it('calls the optional onEnd callback when recognition ends', () => {
+    const onEnd = vi.fn()
+    const recognizer = createContinuousRecognizer(vi.fn(), onEnd)
+
+    recognizer.start()
+    fakeInstance!.onend!()
+
+    expect(onEnd).toHaveBeenCalled()
+  })
+
   it('stop() calls the underlying recognizer stop', () => {
     const recognizer = createContinuousRecognizer(vi.fn())
     recognizer.start()
