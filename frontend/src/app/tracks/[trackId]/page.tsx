@@ -97,7 +97,7 @@ function TrackPageContent() {
 
   return (
     <main style={{ padding: '36px 40px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--ink-faint)', fontSize: 13, fontWeight: 700 }}>
+      <div style={{ alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: 6, color: 'var(--ink-faint)', fontSize: 15, fontWeight: 700 }}>
         <span>Practice</span>
         <span>/</span>
         <span style={{ color: 'var(--ink-soft)' }}>Level {track.level}</span>
