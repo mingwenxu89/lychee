@@ -47,7 +47,28 @@ describe('SentencePracticeView', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
   })
 
-  it('Check submits the typed answer and shows the diff result', async () => {
+  it('Check submits the typed answer and, on a wrong answer, shows the diff result', async () => {
+    mockFetchSequence([
+      new Response(new Blob(['audio-bytes']), { status: 200 }),
+      new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 }),
+      new Response(JSON.stringify({ accuracyScore: 0.5, isCorrect: false, words: [{ word: 'Hello', status: 'Correct' }, { word: 'there.', status: 'Incorrect' }] }), { status: 200 })
+    ])
+
+    render(<SentencePracticeView track={track} initialSentenceIndex={null} onCompleted={vi.fn()} />)
+    await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Hello world.' } })
+    fireEvent.click(screen.getByRole('button', { name: /^check$/i }))
+
+    expect(await screen.findByText('Hello')).toBeInTheDocument()
+    expect(screen.getByText('there.')).toBeInTheDocument()
+    expect(fetch).toHaveBeenLastCalledWith('/api/learner/practice-sessions/session-1/submit', expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({ sentenceId: 's1', submittedText: 'Hello world.' })
+    }))
+  })
+
+  it('on a correct answer, hides the diff text and shows only the checkmark and message', async () => {
     mockFetchSequence([
       new Response(new Blob(['audio-bytes']), { status: 200 }),
       new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 }),
@@ -60,11 +81,8 @@ describe('SentencePracticeView', () => {
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Hello there.' } })
     fireEvent.click(screen.getByRole('button', { name: /^check$/i }))
 
-    expect(await screen.findByText('Hello')).toBeInTheDocument()
-    expect(fetch).toHaveBeenLastCalledWith('/api/learner/practice-sessions/session-1/submit', expect.objectContaining({
-      method: 'POST',
-      body: JSON.stringify({ sentenceId: 's1', submittedText: 'Hello there.' })
-    }))
+    expect(await screen.findByText('Nice — that\'s right!')).toBeInTheDocument()
+    expect(screen.queryByText('Hello')).not.toBeInTheDocument()
   })
 
   it('Skip advances the session and calls onCompleted after the last sentence', async () => {
@@ -96,7 +114,7 @@ describe('SentencePracticeView', () => {
 
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Hello there.' } })
     fireEvent.click(screen.getByRole('button', { name: /^check$/i }))
-    await screen.findByText('Hello')
+    await screen.findByText('Nice — that\'s right!')
 
     fireEvent.click(screen.getByRole('button', { name: /^next$/i }))
 

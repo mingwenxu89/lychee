@@ -20,4 +20,23 @@ describe('DiffText', () => {
     expect(screen.getByText('the')).toHaveAttribute('data-status', 'Missing')
     expect(screen.getByText('extra')).toHaveAttribute('data-status', 'Extra')
   })
+
+  it('in the dictation variant, colors correct words green, leaves mismatches plain black, and hides Extra words', () => {
+    render(
+      <DiffText
+        variant="dictation"
+        words={[
+          { word: 'I', status: 'Correct' },
+          { word: 'first', status: 'Incorrect' },
+          { word: 'the', status: 'Missing' },
+          { word: 'extra', status: 'Extra' }
+        ]}
+      />
+    )
+
+    expect(screen.getByText('I')).toHaveStyle({ color: 'var(--leaf-dark)' })
+    expect(screen.getByText('first')).toHaveStyle({ color: 'var(--ink)' })
+    expect(screen.getByText('the')).toHaveStyle({ color: 'var(--ink)' })
+    expect(screen.queryByText('extra')).not.toBeInTheDocument()
+  })
 })

@@ -478,6 +478,8 @@ export function SentencePracticeView({
           {result && (
             <div
               style={{
+                width: '100%',
+                boxSizing: 'border-box',
                 background: result.isCorrect ? 'var(--leaf-soft)' : 'var(--primary-soft)',
                 borderRadius: 16,
                 padding: '16px 20px',
@@ -488,7 +490,20 @@ export function SentencePracticeView({
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 {result.isCorrect ? (
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--leaf-dark)" strokeWidth="3"><path d="M20 6L9 17l-5-5" /></svg>
+                  <div
+                    style={{
+                      width: 28,
+                      height: 28,
+                      borderRadius: 999,
+                      background: 'var(--leaf)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0
+                    }}
+                  >
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><path d="M20 6L9 17l-5-5" /></svg>
+                  </div>
                 ) : (
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--error)" strokeWidth="2.5"><circle cx="12" cy="12" r="10" /><path d="M12 8v5M12 16h.01" /></svg>
                 )}
@@ -496,9 +511,11 @@ export function SentencePracticeView({
                   {result.isCorrect ? 'Nice — that\'s right!' : 'So close — try again!'}
                 </span>
               </div>
-              <div style={{ fontSize: 17, lineHeight: 1.8, fontWeight: 600 }}>
-                <DiffText words={result.words} />
-              </div>
+              {!result.isCorrect && (
+                <div style={{ fontSize: 17, lineHeight: 1.8, fontWeight: 600 }}>
+                  <DiffText words={result.words} variant="dictation" />
+                </div>
+              )}
             </div>
           )}
 
@@ -512,6 +529,7 @@ export function SentencePracticeView({
             {track.sentences.map((s, i) => {
               const isDone = session !== null && i < session.currentSentenceIndex
               const isCurrent = session !== null && i === session.currentSentenceIndex
+              const digitCount = String(i + 1).length
               return (
                 <button
                   key={s.id}
@@ -527,10 +545,10 @@ export function SentencePracticeView({
                     padding: 0,
                     cursor: isReady ? 'pointer' : 'default',
                     fontWeight: 800,
-                    fontSize: 12,
+                    fontSize: digitCount >= 3 ? 9 : 12,
                     background: isDone ? 'var(--leaf)' : isCurrent ? 'var(--surface)' : 'transparent',
                     border: isCurrent ? '3px solid var(--primary)' : isDone ? 'none' : '2px solid var(--line)',
-                    color: isCurrent ? 'var(--primary)' : 'white'
+                    color: isCurrent ? 'var(--primary)' : isDone ? 'white' : 'var(--ink-soft)'
                   }}
                 >
                   {isDone ? (

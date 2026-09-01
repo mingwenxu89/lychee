@@ -20,11 +20,30 @@ function wordStyle(status: WordDiff['status']): React.CSSProperties {
   }
 }
 
-export function DiffText({ words }: { words: WordDiff[] }) {
+// The sentence-dictation view wants a simpler read: a matched word is green,
+// anything that didn't match (wrong or skipped) is plain black text with no
+// special flagging, and anything the learner typed beyond the reference
+// sentence isn't shown at all rather than struck through.
+function dictationWordStyle(status: WordDiff['status']): React.CSSProperties {
+  switch (status) {
+    case 'Correct':
+      return { color: 'var(--leaf-dark)' }
+    case 'Incorrect':
+    case 'Missing':
+      return { color: 'var(--ink)' }
+    case 'Extra':
+      return {}
+  }
+}
+
+export function DiffText({ words, variant = 'default' }: { words: WordDiff[]; variant?: 'default' | 'dictation' }) {
+  const visibleWords = variant === 'dictation' ? words.filter((w) => w.status !== 'Extra') : words
+  const styleFor = variant === 'dictation' ? dictationWordStyle : wordStyle
+
   return (
     <span>
-      {words.map((w, i) => (
-        <span key={i} data-status={w.status} style={{ ...wordStyle(w.status), marginRight: 6 }}>
+      {visibleWords.map((w, i) => (
+        <span key={i} data-status={w.status} style={{ ...styleFor(w.status), marginRight: 6 }}>
           {w.word}
         </span>
       ))}
