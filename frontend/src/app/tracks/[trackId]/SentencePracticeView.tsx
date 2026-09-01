@@ -365,6 +365,7 @@ export function SentencePracticeView({
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <textarea
               ref={textareaRef}
+              className="dictation-answer"
               rows={3}
               value={answer}
               onChange={(e) => setAnswer(e.target.value)}

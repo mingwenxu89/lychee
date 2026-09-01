@@ -30,3 +30,7 @@ body {
 h1, h2, h3, .display {
   font-family: 'Fredoka', ui-rounded, system-ui, sans-serif;
 }
+
+.dictation-answer::placeholder {
+  color: var(--ink-faint);
+}
