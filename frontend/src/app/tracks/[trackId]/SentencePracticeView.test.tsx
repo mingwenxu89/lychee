@@ -105,7 +105,7 @@ describe('SentencePracticeView', () => {
     })))
   })
 
-  it('Try Again appears to the left of the mic button after a wrong submission, and clears the result', async () => {
+  it('Try Again is always visible and clears the result once one exists', async () => {
     mockFetchSequence([
       new Response(new Blob(['audio-bytes']), { status: 200 }),
       new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 }),
@@ -115,7 +115,7 @@ describe('SentencePracticeView', () => {
     render(<SentencePracticeView track={track} initialSentenceIndex={null} onCompleted={vi.fn()} />)
     await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
 
-    expect(screen.queryByRole('button', { name: /^try again$/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^try again$/i })).toBeInTheDocument()
 
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Wrong answer' } })
     fireEvent.click(screen.getByRole('button', { name: /^check$/i }))
