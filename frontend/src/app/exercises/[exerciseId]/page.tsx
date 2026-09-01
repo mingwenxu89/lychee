@@ -35,7 +35,7 @@ export default function ExerciseDetailPage() {
   if (!detail) return <main style={{ padding: 40, color: 'var(--ink-soft)', fontWeight: 700 }}>Loading...</main>
 
   return (
-    <main style={{ padding: '36px 40px', display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 820 }}>
+    <main style={{ padding: '36px 40px', display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 820, margin: '0 auto' }}>
       <div>
         <h1 style={{ margin: 0, fontSize: 30, fontWeight: 700 }}>{detail.title}</h1>
         {detail.description && <p style={{ color: 'var(--ink-soft)', fontWeight: 600 }}>{detail.description}</p>}

@@ -9,7 +9,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="en">
       <body>
         <NavBar rankLabel="Seedling" activityDays={0} userInitial={null} />
-        {children}
+        <div style={{ maxWidth: 1280, margin: '0 auto' }}>{children}</div>
       </body>
     </html>
   )

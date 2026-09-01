@@ -1,2 +1,4 @@
 .worktrees/
 .superpowers/
+audio/
+.DS_Store

@@ -148,7 +148,7 @@ export default function ExercisesPage() {
       {recentlyPracticed.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <span style={{ fontWeight: 800, fontSize: 14, color: 'var(--ink-faint)' }}>Recently Practiced</span>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 24 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 24 }}>
             {recentlyPracticed.map((exercise) => (
               <ExerciseCard key={exercise.id} exercise={exercise} accent={colorForCategory(exercise.category, categories)} />
             ))}
@@ -156,7 +156,7 @@ export default function ExercisesPage() {
         </div>
       )}
 
-      <div data-testid="exercise-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 24 }}>
+      <div data-testid="exercise-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 24 }}>
         {filtered.map((exercise) => (
           <ExerciseCard key={exercise.id} exercise={exercise} accent={colorForCategory(exercise.category, categories)} />
         ))}
