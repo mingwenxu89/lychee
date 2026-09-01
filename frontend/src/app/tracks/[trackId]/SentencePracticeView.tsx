@@ -392,7 +392,7 @@ export function SentencePracticeView({
                   <button
                     onClick={() => session && handleAdvance(session.currentSentenceIndex + 1)}
                     disabled={!isReady}
-                    style={btnPrimary}
+                    style={{ ...btnPrimary, boxShadow: 'none' }}
                   >
                     Next
                   </button>
