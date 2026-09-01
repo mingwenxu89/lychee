@@ -133,15 +133,12 @@ export default function ExerciseDetailPage() {
                       minWidth: 0
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
-                      <div style={{ fontWeight: 700, fontSize: 14 }}>{track.title}</div>
-                      <span style={{ flexShrink: 0, color: 'var(--ink-faint)', fontSize: 12, fontWeight: 700 }}>{track.level}</span>
-                    </div>
+                    <div style={{ fontWeight: 700, fontSize: 14 }}>{track.title}</div>
                     {track.description && (
                       <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>{track.description}</div>
                     )}
                     <div style={{ fontSize: 12, color: 'var(--ink-faint)' }}>
-                      {track.sentenceCount} sentences &middot; {track.wordsPerMinute} wpm
+                      {track.sentenceCount} sentences &middot; {track.level} &middot; {track.wordsPerMinute} wpm
                     </div>
                   </Link>
                 ))}
