@@ -10,8 +10,62 @@ public record ComparisonResult(List<WordDiff> Words, double AccuracyScore, bool 
 
 public static class TextComparer
 {
+    // Only the single most common expansion is used for ambiguous contractions
+    // (e.g. "he's" -> "he is", not "he has"; "I'd" -> "I would", not "I had") —
+    // good enough for comparing spoken/typed answers against a reference
+    // sentence, not a general-purpose English parser.
+    private static readonly Dictionary<string, string> ContractionExpansions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["i'm"] = "i am",
+        ["i've"] = "i have",
+        ["i'll"] = "i will",
+        ["i'd"] = "i would",
+        ["you're"] = "you are",
+        ["you've"] = "you have",
+        ["you'll"] = "you will",
+        ["you'd"] = "you would",
+        ["he's"] = "he is",
+        ["she's"] = "she is",
+        ["it's"] = "it is",
+        ["we're"] = "we are",
+        ["we've"] = "we have",
+        ["we'll"] = "we will",
+        ["we'd"] = "we would",
+        ["they're"] = "they are",
+        ["they've"] = "they have",
+        ["they'll"] = "they will",
+        ["they'd"] = "they would",
+        ["that's"] = "that is",
+        ["that'll"] = "that will",
+        ["who's"] = "who is",
+        ["what's"] = "what is",
+        ["where's"] = "where is",
+        ["there's"] = "there is",
+        ["here's"] = "here is",
+        ["let's"] = "let us",
+        ["isn't"] = "is not",
+        ["aren't"] = "are not",
+        ["wasn't"] = "was not",
+        ["weren't"] = "were not",
+        ["don't"] = "do not",
+        ["doesn't"] = "does not",
+        ["didn't"] = "did not",
+        ["can't"] = "cannot",
+        ["won't"] = "will not",
+        ["wouldn't"] = "would not",
+        ["shouldn't"] = "should not",
+        ["couldn't"] = "could not",
+        ["mustn't"] = "must not",
+        ["haven't"] = "have not",
+        ["hasn't"] = "has not",
+        ["hadn't"] = "had not"
+    };
+
     public static ComparisonResult Compare(string referenceText, string submittedText)
     {
+        referenceText = ExpandContractions(referenceText);
+        submittedText = ExpandContractions(submittedText);
+
         var refWords = Tokenize(referenceText);
         var subWords = Tokenize(submittedText);
         var refNorm = refWords.Select(Normalize).ToArray();
@@ -82,12 +136,45 @@ public static class TextComparer
         }
 
         var accuracy = n == 0 ? (m == 0 ? 1.0 : 0.0) : (double)correctCount / n;
-        var isExactMatch = words.All(w => w.Status == WordDiffStatus.Correct);
+        var isExactMatch = ComputeIsExactMatch(words);
 
         return new ComparisonResult(words, accuracy, isExactMatch);
     }
 
     public static int CountWords(string text) => Tokenize(text).Length;
+
+    // The reference sentence counts as fully matched if it appears anywhere in the
+    // submission as one unbroken run — extra words before and/or after are allowed
+    // (the learner said/typed more than the sentence), but a word inserted *inside*
+    // the reference breaks continuity and must not count as a match.
+    private static bool ComputeIsExactMatch(List<WordDiff> words)
+    {
+        if (words.Any(w => w.Status is WordDiffStatus.Incorrect or WordDiffStatus.Missing))
+        {
+            return false;
+        }
+
+        var firstCorrect = words.FindIndex(w => w.Status == WordDiffStatus.Correct);
+        if (firstCorrect == -1)
+        {
+            return words.Count == 0;
+        }
+
+        var lastCorrect = words.FindLastIndex(w => w.Status == WordDiffStatus.Correct);
+        for (var k = firstCorrect; k <= lastCorrect; k++)
+        {
+            if (words[k].Status != WordDiffStatus.Correct) return false;
+        }
+
+        return true;
+    }
+
+    private static string ExpandContractions(string text) =>
+        Regex.Replace(text, @"[A-Za-z]+['’][A-Za-z]+", match =>
+        {
+            var key = match.Value.Replace('’', '\'');
+            return ContractionExpansions.TryGetValue(key, out var expanded) ? expanded : match.Value;
+        });
 
     private static string[] Tokenize(string text) =>
         Regex.Matches(text, @"[A-Za-z0-9']+").Select(m => m.Value).ToArray();

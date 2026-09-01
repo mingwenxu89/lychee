@@ -192,7 +192,11 @@ export function SentencePracticeView({
       body: JSON.stringify({ sentenceId: currentSentence.id, submittedText: answer })
     })
     if (response.ok) {
-      setResult(await response.json())
+      const submitResult: SubmitResult = await response.json()
+      setResult(submitResult)
+      if (submitResult.isCorrect) {
+        setAnswer(currentSentence.text)
+      }
     } else {
       setActionError('Failed to submit your answer. Please try again.')
     }
@@ -392,7 +396,7 @@ export function SentencePracticeView({
                   <button
                     onClick={() => session && handleAdvance(session.currentSentenceIndex + 1)}
                     disabled={!isReady}
-                    style={{ ...btnPrimary, boxShadow: 'none' }}
+                    style={btnPrimarySmall}
                   >
                     Next
                   </button>

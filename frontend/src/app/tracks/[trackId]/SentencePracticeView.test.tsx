@@ -85,6 +85,23 @@ describe('SentencePracticeView', () => {
     expect(screen.queryByText('Hello')).not.toBeInTheDocument()
   })
 
+  it('on a correct answer, replaces the typed text with the clean reference sentence', async () => {
+    mockFetchSequence([
+      new Response(new Blob(['audio-bytes']), { status: 200 }),
+      new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 }),
+      new Response(JSON.stringify({ accuracyScore: 1, isCorrect: true, words: [{ word: 'well', status: 'Extra' }, { word: 'Hello', status: 'Correct' }, { word: 'there.', status: 'Correct' }] }), { status: 200 })
+    ])
+
+    render(<SentencePracticeView track={track} initialSentenceIndex={null} onCompleted={vi.fn()} />)
+    await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'well Hello there.' } })
+    fireEvent.click(screen.getByRole('button', { name: /^check$/i }))
+
+    await screen.findByText('Nice — that\'s right!')
+    expect(screen.getByRole('textbox')).toHaveValue('Hello there.')
+  })
+
   it('Skip advances the session and calls onCompleted after the last sentence', async () => {
     const onCompleted = vi.fn()
     mockFetchSequence([
