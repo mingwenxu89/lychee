@@ -262,6 +262,7 @@ describe('SentencePracticeView', () => {
     const field = screen.getByRole('textbox')
     expect(field.tagName).toBe('TEXTAREA')
     expect(field).toHaveAttribute('rows', '3')
+    expect(field).toHaveAttribute('placeholder', 'Type what you hear, or tap the mic to speak it instead')
   })
 
   it('shows a recording indicator while the mic is listening, and hides it when recognition ends', async () => {
@@ -302,6 +303,44 @@ describe('SentencePracticeView', () => {
 
     await waitFor(() => expect(screen.queryByLabelText('Recording')).not.toBeInTheDocument())
     expect(screen.getByRole('button', { name: /use microphone/i })).toBeInTheDocument()
+
+    vi.unstubAllGlobals()
+  })
+
+  it('appends recognized speech to whatever was already typed, rather than replacing it', async () => {
+    class FakeSpeechRecognition {
+      continuous = false
+      interimResults = false
+      onresult: ((event: unknown) => void) | null = null
+      onend: (() => void) | null = null
+      start = vi.fn()
+      stop = vi.fn()
+    }
+    let fakeInstance: FakeSpeechRecognition
+    vi.stubGlobal('SpeechRecognition', vi.fn().mockImplementation(function (this: unknown) {
+      fakeInstance = new FakeSpeechRecognition()
+      return fakeInstance
+    }))
+
+    mockFetchSequence([
+      new Response(new Blob(['audio-bytes']), { status: 200 }),
+      new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 })
+    ])
+
+    render(<SentencePracticeView track={track} initialSentenceIndex={null} onCompleted={vi.fn()} />)
+    await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Hello' } })
+    fireEvent.click(screen.getByRole('button', { name: /use microphone/i }))
+
+    fakeInstance!.onresult!({ results: [[{ transcript: 'there' }]] })
+    await waitFor(() => expect(screen.getByRole('textbox')).toHaveValue('Hello there'))
+
+    // Stopping without any further recognized speech must not clear the text.
+    fireEvent.click(screen.getByRole('button', { name: /stop microphone/i }))
+    fakeInstance!.onend!()
+    await waitFor(() => expect(screen.queryByRole('button', { name: /use microphone/i })).toBeInTheDocument())
+    expect(screen.getByRole('textbox')).toHaveValue('Hello there')
 
     vi.unstubAllGlobals()
   })

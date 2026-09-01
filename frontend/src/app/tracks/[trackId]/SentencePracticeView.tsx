@@ -90,6 +90,7 @@ export function SentencePracticeView({
   const audioRef = useRef<HTMLAudioElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const recognizerRef = useRef<{ start: () => void; stop: () => void } | null>(null)
+  const baseAnswerRef = useRef('')
 
   useEffect(() => {
     async function init() {
@@ -224,8 +225,9 @@ export function SentencePracticeView({
       recognizerRef.current?.stop()
       return
     }
+    baseAnswerRef.current = answer
     const recognizer = createContinuousRecognizer(
-      (text) => setAnswer(text),
+      (text) => setAnswer(baseAnswerRef.current ? `${baseAnswerRef.current} ${text}` : text),
       () => setIsRecording(false)
     )
     recognizerRef.current = recognizer
@@ -366,7 +368,7 @@ export function SentencePracticeView({
               rows={3}
               value={answer}
               onChange={(e) => setAnswer(e.target.value)}
-              placeholder="Type what you hear"
+              placeholder="Type what you hear, or tap the mic to speak it instead"
               disabled={!isReady}
               style={{
                 width: '100%',
@@ -383,9 +385,11 @@ export function SentencePracticeView({
               }}
             />
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-              <span style={{ fontSize: 12, color: 'var(--ink-faint)', fontWeight: 600, paddingLeft: 2 }}>
-                Type your answer, or tap the mic to speak it instead
-              </span>
+              {result && result.isCorrect ? (
+                <span />
+              ) : (
+                <button onClick={handleSubmit} disabled={!isReady} style={{ ...btnPrimarySmall, opacity: isReady ? 1 : 0.5 }}>Check</button>
+              )}
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <button
                   onClick={() => setResult(null)}
@@ -489,16 +493,13 @@ export function SentencePracticeView({
                 Next
               </button>
             ) : (
-              <>
-                <button onClick={handleSubmit} disabled={!isReady} style={{ ...btnPrimarySmall, opacity: isReady ? 1 : 0.5 }}>Check</button>
-                <button
-                  onClick={() => session && handleAdvance(session.currentSentenceIndex + 1)}
-                  disabled={!isReady}
-                  style={{ ...btnGhostSmall, opacity: isReady ? 1 : 0.5 }}
-                >
-                  Skip
-                </button>
-              </>
+              <button
+                onClick={() => session && handleAdvance(session.currentSentenceIndex + 1)}
+                disabled={!isReady}
+                style={{ ...btnGhostSmall, opacity: isReady ? 1 : 0.5 }}
+              >
+                Skip
+              </button>
             )}
           </div>
         </div>
