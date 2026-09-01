@@ -262,6 +262,42 @@ describe('SentencePracticeView', () => {
     expect(field).toHaveAttribute('rows', '3')
   })
 
+  it('shows a recording indicator while the mic is listening, and hides it when recognition ends', async () => {
+    class FakeSpeechRecognition {
+      continuous = false
+      interimResults = false
+      onresult: ((event: unknown) => void) | null = null
+      onend: (() => void) | null = null
+      start = vi.fn()
+      stop = vi.fn()
+    }
+    let fakeInstance: FakeSpeechRecognition
+    vi.stubGlobal('SpeechRecognition', vi.fn().mockImplementation(function (this: unknown) {
+      fakeInstance = new FakeSpeechRecognition()
+      return fakeInstance
+    }))
+
+    mockFetchSequence([
+      new Response(new Blob(['audio-bytes']), { status: 200 }),
+      new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 })
+    ])
+
+    render(<SentencePracticeView track={track} initialSentenceIndex={null} onCompleted={vi.fn()} />)
+    await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
+
+    expect(screen.queryByLabelText('Recording')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /use microphone/i }))
+
+    expect(screen.getByLabelText('Recording')).toBeInTheDocument()
+
+    fakeInstance!.onend!()
+
+    await waitFor(() => expect(screen.queryByLabelText('Recording')).not.toBeInTheDocument())
+
+    vi.unstubAllGlobals()
+  })
+
   it('when initialSentenceIndex is provided, advances there immediately instead of resuming', async () => {
     mockFetchSequence([
       new Response(new Blob(['audio-bytes']), { status: 200 }),

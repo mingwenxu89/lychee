@@ -21,7 +21,7 @@ export function isSpeechRecognitionSupported(): boolean {
   return getSpeechRecognitionConstructor() !== null
 }
 
-export function createSingleUtteranceRecognizer(onResult: (text: string) => void) {
+export function createSingleUtteranceRecognizer(onResult: (text: string) => void, onEnd?: () => void) {
   const Constructor = getSpeechRecognitionConstructor()
   if (!Constructor) {
     return { start: () => {}, stop: () => {} }
@@ -32,6 +32,9 @@ export function createSingleUtteranceRecognizer(onResult: (text: string) => void
   recognition.onresult = (event) => {
     const transcript = event.results[0][0].transcript
     onResult(transcript)
+  }
+  if (onEnd) {
+    recognition.onend = onEnd
   }
 
   return {

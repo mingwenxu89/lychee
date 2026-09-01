@@ -40,6 +40,19 @@ const btnGhost: React.CSSProperties = {
   cursor: 'pointer'
 }
 
+const btnPrimarySmall: React.CSSProperties = {
+  ...btnPrimary,
+  fontSize: 14,
+  padding: '11px 24px',
+  boxShadow: 'none'
+}
+
+const btnGhostSmall: React.CSSProperties = {
+  ...btnGhost,
+  fontSize: 14,
+  padding: '9px 20px'
+}
+
 const chipStyle: React.CSSProperties = {
   background: 'oklch(96% 0.01 80)',
   borderRadius: 999,
@@ -73,6 +86,7 @@ export function SentencePracticeView({
   const [actionError, setActionError] = useState<string | null>(null)
   const [elapsedInSentence, setElapsedInSentence] = useState(0)
   const [isPlaying, setIsPlaying] = useState(false)
+  const [isRecording, setIsRecording] = useState(false)
   const audioRef = useRef<HTMLAudioElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -205,7 +219,11 @@ export function SentencePracticeView({
   }
 
   function handleMicClick() {
-    const recognizer = createSingleUtteranceRecognizer((text) => setAnswer(text))
+    const recognizer = createSingleUtteranceRecognizer(
+      (text) => setAnswer(text),
+      () => setIsRecording(false)
+    )
+    setIsRecording(true)
     recognizer.start()
   }
 
@@ -337,35 +355,40 @@ export function SentencePracticeView({
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <textarea
-                ref={textareaRef}
-                rows={3}
-                value={answer}
-                onChange={(e) => setAnswer(e.target.value)}
-                placeholder="Type what you hear"
-                disabled={!isReady}
-                style={{
-                  flex: 1,
-                  border: '2px solid var(--line)',
-                  borderRadius: 16,
-                  padding: '16px 18px',
-                  fontSize: 16,
-                  fontWeight: 600,
-                  color: 'var(--ink)',
-                  fontFamily: 'inherit',
-                  resize: 'none',
-                  overflow: 'hidden'
-                }}
-              />
+            <textarea
+              ref={textareaRef}
+              rows={3}
+              value={answer}
+              onChange={(e) => setAnswer(e.target.value)}
+              placeholder="Type what you hear"
+              disabled={!isReady}
+              style={{
+                width: '100%',
+                border: '2px solid var(--line)',
+                borderRadius: 16,
+                padding: '16px 18px',
+                fontSize: 16,
+                fontWeight: 600,
+                color: 'var(--ink)',
+                fontFamily: 'inherit',
+                resize: 'none',
+                overflow: 'hidden',
+                boxSizing: 'border-box'
+              }}
+            />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+              <span style={{ fontSize: 12, color: 'var(--ink-faint)', fontWeight: 600, paddingLeft: 2 }}>
+                Type your answer, or tap the mic to speak it instead
+              </span>
               {isSpeechRecognitionSupported() && (
                 <button
                   onClick={handleMicClick}
                   aria-label="Use microphone"
                   disabled={!isReady}
                   style={{
-                    width: 56,
-                    height: 56,
+                    position: 'relative',
+                    width: 44,
+                    height: 44,
                     borderRadius: 999,
                     background: 'var(--primary-soft)',
                     border: 'none',
@@ -376,16 +399,24 @@ export function SentencePracticeView({
                     cursor: isReady ? 'pointer' : 'default'
                   }}
                 >
-                  🎤
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z" /><path d="M19 11a7 7 0 0 1-14 0" strokeLinecap="round" /></svg>
+                  {isRecording && (
+                    <span
+                      aria-label="Recording"
+                      style={{
+                        position: 'absolute',
+                        top: 2,
+                        right: 2,
+                        width: 10,
+                        height: 10,
+                        borderRadius: 999,
+                        background: 'var(--error)'
+                      }}
+                    />
+                  )}
                 </button>
               )}
-              {result && !result.isCorrect && (
-                <button onClick={() => setResult(null)} style={{ ...btnPrimary, boxShadow: 'none' }}>Try Again</button>
-              )}
             </div>
-            <span style={{ fontSize: 12, color: 'var(--ink-faint)', fontWeight: 600, paddingLeft: 2 }}>
-              Type your answer, or tap the mic to speak it instead
-            </span>
           </div>
 
           {actionError && <p role="alert" style={{ color: 'var(--error)', fontWeight: 700, margin: 0 }}>{actionError}</p>}
@@ -417,7 +448,7 @@ export function SentencePracticeView({
             </div>
           )}
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             {result && result.isCorrect ? (
               <button
                 onClick={() => session && handleAdvance(session.currentSentenceIndex + 1)}
@@ -428,11 +459,34 @@ export function SentencePracticeView({
               </button>
             ) : (
               <>
-                <button onClick={handleSubmit} disabled={!isReady} style={{ ...btnPrimary, boxShadow: 'none', opacity: isReady ? 1 : 0.5 }}>Check</button>
+                {result && !result.isCorrect && (
+                  <button
+                    onClick={() => setResult(null)}
+                    aria-label="Try again"
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 999,
+                      background: 'transparent',
+                      border: '2px solid var(--line)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--ink-soft)" strokeWidth="2.5">
+                      <path d="M3 12a9 9 0 1 0 3-6.7" strokeLinecap="round" />
+                      <path d="M3 4v5h5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                )}
+                <button onClick={handleSubmit} disabled={!isReady} style={{ ...btnPrimarySmall, opacity: isReady ? 1 : 0.5 }}>Check</button>
                 <button
                   onClick={() => session && handleAdvance(session.currentSentenceIndex + 1)}
                   disabled={!isReady}
-                  style={{ ...btnGhost, opacity: isReady ? 1 : 0.5 }}
+                  style={{ ...btnGhostSmall, opacity: isReady ? 1 : 0.5 }}
                 >
                   Skip
                 </button>

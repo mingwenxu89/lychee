@@ -56,6 +56,16 @@ describe('createSingleUtteranceRecognizer', () => {
     fakeInstance!.onresult!({ results: [[{ transcript: 'hello world' }]] })
     expect(onResult).toHaveBeenCalledWith('hello world')
   })
+
+  it('calls the optional onEnd callback when recognition ends', () => {
+    const onEnd = vi.fn()
+    const recognizer = createSingleUtteranceRecognizer(vi.fn(), onEnd)
+
+    recognizer.start()
+    fakeInstance!.onend!()
+
+    expect(onEnd).toHaveBeenCalled()
+  })
 })
 
 describe('createContinuousRecognizer', () => {
