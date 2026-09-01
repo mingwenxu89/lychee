@@ -1,4 +1,5 @@
 using Lychee.Api.Auth;
+using Lychee.Api.Content;
 using Lychee.Data;
 using Lychee.Data.Entities;
 using Microsoft.AspNetCore.Authorization;
@@ -103,17 +104,9 @@ public class LearnerExercisesController : ControllerBase
                 u.Id, u.Title, u.Order,
                 u.Tracks.OrderBy(t => t.CreatedAt).Select(t => new LearnerExerciseTrackResponse(
                     t.Id, t.Title, t.Description, t.Level, t.Duration,
-                    t.Sentences.Count, ComputeWordsPerMinute(t), completedSet.Contains(t.Id))).ToList()))
+                    t.Sentences.Count, TrackMetrics.ComputeWordsPerMinute(t), completedSet.Contains(t.Id))).ToList()))
             .ToList();
 
         return Ok(new LearnerExerciseDetailResponse(exercise.Id, exercise.Title, exercise.Description, exercise.Category, units));
-    }
-
-    private static int ComputeWordsPerMinute(Track track)
-    {
-        if (track.Duration <= TimeSpan.Zero) return 0;
-
-        var wordCount = track.Sentences.Sum(s => s.Text.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length);
-        return (int)Math.Round(wordCount / track.Duration.TotalMinutes);
     }
 }

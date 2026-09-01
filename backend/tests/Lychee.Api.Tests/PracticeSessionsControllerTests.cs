@@ -133,8 +133,11 @@ public class PracticeSessionsControllerTests : IClassFixture<LycheeWebApplicatio
     }
 
     [Fact]
-    public async Task Submit_CorrectAnswer_ReturnsFullAccuracyAndPersistsRecord()
+    public async Task Submit_RecordsAnAnswerAsCorrect()
     {
+        // The frontend now determines correctness itself and only ever calls this endpoint to
+        // record a correct answer — the endpoint no longer re-checks the submitted text, so
+        // this proves the resulting record counts toward a completed session's accuracy.
         var admin = AdminClient();
         var trackId = await CreateTrackWithTwoSentencesAsync(admin);
         var learner = await LearnerClientAsync();
@@ -144,37 +147,17 @@ public class PracticeSessionsControllerTests : IClassFixture<LycheeWebApplicatio
 
         var trackResponse = await learner.GetAsync($"/api/learner/tracks/{trackId}");
         var track = await trackResponse.Content.ReadFromJsonAsync<LearnerTrackResponse>();
-        var firstSentence = track!.Sentences[0];
 
-        var submitResponse = await learner.PostAsJsonAsync($"/api/learner/practice-sessions/{session!.Id}/submit",
-            new { sentenceId = firstSentence.Id, submittedText = firstSentence.Text });
+        foreach (var sentence in track!.Sentences)
+        {
+            var submitResponse = await learner.PostAsJsonAsync($"/api/learner/practice-sessions/{session!.Id}/submit",
+                new { sentenceId = sentence.Id, submittedText = sentence.Text });
+            Assert.Equal(HttpStatusCode.NoContent, submitResponse.StatusCode);
+        }
 
-        Assert.Equal(HttpStatusCode.OK, submitResponse.StatusCode);
-        var result = await submitResponse.Content.ReadFromJsonAsync<SubmitAnswerResponse>();
-        Assert.True(result!.IsCorrect);
-        Assert.Equal(1.0, result.AccuracyScore);
-        Assert.All(result.Words, w => Assert.Equal("Correct", w.Status));
-    }
-
-    [Fact]
-    public async Task Submit_WrongAnswer_ReturnsPartialAccuracy()
-    {
-        var admin = AdminClient();
-        var trackId = await CreateTrackWithTwoSentencesAsync(admin);
-        var learner = await LearnerClientAsync();
-
-        var startResponse = await learner.PostAsync($"/api/learner/tracks/{trackId}/practice-session/start", null);
-        var session = await startResponse.Content.ReadFromJsonAsync<PracticeSessionResponse>();
-        var trackResponse = await learner.GetAsync($"/api/learner/tracks/{trackId}");
-        var track = await trackResponse.Content.ReadFromJsonAsync<LearnerTrackResponse>();
-        var firstSentence = track!.Sentences[0];
-
-        var submitResponse = await learner.PostAsJsonAsync($"/api/learner/practice-sessions/{session!.Id}/submit",
-            new { sentenceId = firstSentence.Id, submittedText = "completely wrong text" });
-
-        var result = await submitResponse.Content.ReadFromJsonAsync<SubmitAnswerResponse>();
-        Assert.False(result!.IsCorrect);
-        Assert.True(result.AccuracyScore < 1.0);
+        var advanceResponse = await learner.PostAsJsonAsync($"/api/learner/practice-sessions/{session!.Id}/advance", new { toIndex = 2 });
+        var advanced = await advanceResponse.Content.ReadFromJsonAsync<AdvanceSessionResponse>();
+        Assert.Equal(1.0, advanced!.OverallAccuracy);
     }
 
     [Fact]
@@ -248,8 +231,8 @@ public class PracticeSessionsControllerTests : IClassFixture<LycheeWebApplicatio
             new { sentenceId = firstSentence.Id, submittedText = firstSentence.Text });
         var responses = await Task.WhenAll(firstCallTask, secondCallTask);
 
-        Assert.Equal(HttpStatusCode.OK, responses[0].StatusCode);
-        Assert.Equal(HttpStatusCode.OK, responses[1].StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, responses[0].StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, responses[1].StatusCode);
     }
 
     [Fact]

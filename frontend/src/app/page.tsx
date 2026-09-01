@@ -95,7 +95,7 @@ export default function ExercisesPage() {
   if (!exercises) return <main style={{ padding: 40, color: 'var(--ink-soft)', fontWeight: 700 }}>Loading...</main>
 
   return (
-    <main style={{ padding: '36px 40px', display: 'flex', flexDirection: 'column', gap: 26 }}>
+    <main style={{ padding: '20px 40px', display: 'flex', flexDirection: 'column', gap: 26 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <h1 style={{ margin: 0, fontSize: 30, fontWeight: 700 }}>All Exercises</h1>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--surface)', border: '2px solid var(--line)', borderRadius: 999, padding: '10px 18px', width: 260 }}>

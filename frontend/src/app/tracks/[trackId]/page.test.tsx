@@ -13,7 +13,7 @@ describe('TrackPage', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
       new Response(JSON.stringify({
-        id: 'track-1', unitId: 'unit-1', exerciseId: 'exercise-1', title: 'The First Snowfall', exerciseTitle: 'Verify Exercise', level: 'A1', duration: '00:00:05',
+        id: 'track-1', unitId: 'unit-1', exerciseId: 'exercise-1', title: 'The First Snowfall', description: null, exerciseTitle: 'Verify Exercise', level: 'A1', wordsPerMinute: 120, duration: '00:00:05',
         audioUrl: 'https://example.test/audio.mp3',
         sentences: [{ id: 's1', index: 0, text: 'Hello.', startTime: '00:00:00', endTime: '00:00:02' }],
         nextTrackId: null
@@ -46,5 +46,29 @@ describe('TrackPage', () => {
     expect(screen.getByText('Home').closest('a')).toHaveAttribute('href', '/')
     expect(screen.getByText('Verify Exercise').closest('a')).toHaveAttribute('href', '/exercises/exercise-1')
     expect(screen.getByText('The First Snowfall').closest('a')).toBeNull()
+  })
+
+  it('shows the level and words-per-minute next to the mode toggle', async () => {
+    render(<TrackPage />)
+    await screen.findByText('By Sentence')
+
+    expect(screen.getByText('Vocab Level: A1')).toBeInTheDocument()
+    expect(screen.getByText('Speed: 120 wpm')).toBeInTheDocument()
+  })
+
+  it('shows the track description above Vocab Level/Speed when present', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({
+        id: 'track-1', unitId: 'unit-1', exerciseId: 'exercise-1', title: 'The First Snowfall', description: 'A short passage about winter.', exerciseTitle: 'Verify Exercise', level: 'A1', wordsPerMinute: 120, duration: '00:00:05',
+        audioUrl: 'https://example.test/audio.mp3',
+        sentences: [{ id: 's1', index: 0, text: 'Hello.', startTime: '00:00:00', endTime: '00:00:02' }],
+        nextTrackId: null
+      }), { status: 200 })
+    ))
+
+    render(<TrackPage />)
+    await screen.findByText('By Sentence')
+
+    expect(screen.getByText('A short passage about winter.')).toBeInTheDocument()
   })
 })

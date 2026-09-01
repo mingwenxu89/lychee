@@ -34,3 +34,12 @@ h1, h2, h3, .display {
 .dictation-answer::placeholder {
   color: var(--ink-faint);
 }
+
+@keyframes recording-dot-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.2; }
+}
+
+.recording-dot {
+  animation: recording-dot-blink 2s ease-in-out infinite;
+}

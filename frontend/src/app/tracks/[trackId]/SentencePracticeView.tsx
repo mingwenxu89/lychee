@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { preloadAudio } from '@/lib/audioPreload'
 import { parseTimeSpanToSeconds } from '@/lib/timeSpan'
 import { isSpeechRecognitionSupported, createContinuousRecognizer } from '@/lib/speechRecognition'
+import { compare } from '@/lib/textComparer'
 import { DiffText, type WordDiff } from '@/components/DiffText'
 import type { LearnerTrack } from './page'
 
@@ -14,7 +15,7 @@ type AdvanceResult = { currentSentenceIndex: number; isCompleted: boolean; overa
 const cardStyle: React.CSSProperties = {
   background: 'var(--surface)',
   borderRadius: 24,
-  boxShadow: '0 10px 0 var(--line), 0 14px 28px oklch(22% 0.03 270 / 0.07)'
+  boxShadow: 'none'
 }
 
 const btnPrimary: React.CSSProperties = {
@@ -62,6 +63,50 @@ const chipStyle: React.CSSProperties = {
   color: 'var(--ink-soft)'
 }
 
+const overlayStyle: React.CSSProperties = {
+  position: 'fixed',
+  inset: 0,
+  background: 'oklch(22% 0.03 270 / 0.55)',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  zIndex: 10
+}
+
+const modalStyle: React.CSSProperties = {
+  width: 420,
+  maxWidth: '92vw',
+  background: 'var(--surface)',
+  borderRadius: 28,
+  boxShadow: '0 14px 0 var(--line), 0 22px 44px oklch(22% 0.03 270 / 0.22)',
+  padding: '32px 36px',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 18
+}
+
+const keyBadgeStyle: React.CSSProperties = {
+  background: 'oklch(96% 0.01 80)',
+  border: '1px solid var(--line)',
+  borderRadius: 8,
+  padding: '4px 10px',
+  fontWeight: 800,
+  fontSize: 13,
+  color: 'var(--ink-soft)',
+  fontFamily: 'inherit',
+  whiteSpace: 'nowrap'
+}
+
+const SHORTCUTS: { keys: string; description: string }[] = [
+  { keys: 'Enter', description: 'Check / Next' },
+  { keys: 'Ctrl', description: 'Replay this sentence' },
+  { keys: 'Ctrl + ←', description: 'Previous sentence' },
+  { keys: 'Ctrl + →', description: 'Next sentence' },
+  { keys: 'Ctrl + ↑', description: 'Try again' },
+  { keys: 'Ctrl + Enter', description: 'Skip' },
+  { keys: 'Ctrl + M', description: 'Toggle microphone' }
+]
+
 function formatTime(seconds: number): string {
   const total = Math.max(0, Math.round(seconds))
   const m = Math.floor(total / 60)
@@ -71,11 +116,9 @@ function formatTime(seconds: number): string {
 
 export function SentencePracticeView({
   track,
-  initialSentenceIndex,
   onCompleted
 }: {
   track: LearnerTrack
-  initialSentenceIndex: number | null
   onCompleted: (accuracyScore: number) => void
 }) {
   const [audioObjectUrl, setAudioObjectUrl] = useState<string | null>(null)
@@ -87,10 +130,13 @@ export function SentencePracticeView({
   const [elapsedInSentence, setElapsedInSentence] = useState(0)
   const [isPlaying, setIsPlaying] = useState(false)
   const [isRecording, setIsRecording] = useState(false)
+  const [completedIndices, setCompletedIndices] = useState<Set<number>>(new Set())
+  const [showShortcuts, setShowShortcuts] = useState(false)
   const audioRef = useRef<HTMLAudioElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const recognizerRef = useRef<{ start: () => void; stop: () => void } | null>(null)
   const baseAnswerRef = useRef('')
+  const ctrlComboFiredRef = useRef(false)
 
   useEffect(() => {
     async function init() {
@@ -108,21 +154,14 @@ export function SentencePracticeView({
         return
       }
       const startedSession: PracticeSession = await startResponse.json()
-
-      if (initialSentenceIndex !== null) {
-        const advanceResponse = await fetch(`/api/learner/practice-sessions/${startedSession.id}/advance`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ toIndex: initialSentenceIndex })
-        })
-        const advanced: AdvanceResult = await advanceResponse.json()
-        setSession({ ...startedSession, currentSentenceIndex: advanced.currentSentenceIndex })
-      } else {
-        setSession(startedSession)
-      }
+      // Seed completed sentences from wherever the session resumes at (a prior visit's real
+      // progress) — from here on, only an actual correct check or a Skip adds to this set;
+      // navigating with Previous/Next or jumping via the Progress list never does.
+      setCompletedIndices(new Set(Array.from({ length: startedSession.currentSentenceIndex }, (_, i) => i)))
+      setSession(startedSession)
     }
     init()
-  }, [track.id, track.audioUrl, initialSentenceIndex])
+  }, [track.id, track.audioUrl])
 
   const currentSentence = session ? track.sentences[session.currentSentenceIndex] : null
   const sentenceStart = currentSentence ? parseTimeSpanToSeconds(currentSentence.startTime) : 0
@@ -183,23 +222,33 @@ export function SentencePracticeView({
     }
   }
 
-  async function handleSubmit() {
+  function handleReplayClick() {
+    const audio = audioRef.current
+    if (!audio) return
+    audio.currentTime = sentenceStart
+    audio.play()
+  }
+
+  function handleSubmit() {
     if (!session || !currentSentence) return
     setActionError(null)
-    const response = await fetch(`/api/learner/practice-sessions/${session.id}/submit`, {
+    const comparison = compare(currentSentence.text, answer)
+    setResult({ accuracyScore: comparison.accuracyScore, isCorrect: comparison.isExactMatch, words: comparison.words })
+    if (!comparison.isExactMatch) return
+
+    setCompletedIndices((prev) => new Set(prev).add(session.currentSentenceIndex))
+
+    // Only a correct answer is ever sent to the backend to record — a wrong attempt never
+    // leaves the browser, and skipping (handleAdvance) has never recorded one either.
+    const submittedText = answer
+    setAnswer(currentSentence.text)
+    fetch(`/api/learner/practice-sessions/${session.id}/submit`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sentenceId: currentSentence.id, submittedText: answer })
+      body: JSON.stringify({ sentenceId: currentSentence.id, submittedText })
+    }).then((response) => {
+      if (!response.ok) setActionError('Failed to save your progress. Please try again.')
     })
-    if (response.ok) {
-      const submitResult: SubmitResult = await response.json()
-      setResult(submitResult)
-      if (submitResult.isCorrect) {
-        setAnswer(currentSentence.text)
-      }
-    } else {
-      setActionError('Failed to submit your answer. Please try again.')
-    }
   }
 
   async function handleAdvance(toIndex: number) {
@@ -224,6 +273,14 @@ export function SentencePracticeView({
     }
   }
 
+  function handleSkip() {
+    if (!session) return
+    // Skip means the learner is confident they know this sentence, so it counts toward
+    // Progress — unlike Previous/Next (pure navigation) or jumping via the Progress list.
+    setCompletedIndices((prev) => new Set(prev).add(session.currentSentenceIndex))
+    handleAdvance(session.currentSentenceIndex + 1)
+  }
+
   function handleMicClick() {
     if (isRecording) {
       recognizerRef.current?.stop()
@@ -239,39 +296,104 @@ export function SentencePracticeView({
     recognizer.start()
   }
 
-  if (error) return <p role="alert" style={{ color: 'var(--error)', fontWeight: 700 }}>{error}</p>
-
   // Pre-download (and session start) gate the playback/answer controls rather than
   // hiding them entirely: the controls must exist in the DOM up front (disabled)
   // so the learner sees the view take shape, per spec §5.1 "pre-download gates
   // playback controls".
   const isReady = session !== null && currentSentence !== null && audioObjectUrl !== null
+
+  // Keyboard shortcuts: plain Enter mirrors Check/Next; a tap of Ctrl alone (pressed and
+  // released with nothing else in between) rewinds to the sentence's start and replays it
+  // (Play/Pause itself stays mouse-only, unlike Full Listen's Space shortcut); Ctrl held as a
+  // modifier for Left/Right/Up/Enter/M mirrors Previous/Next/Try Again/Skip/Mic. The
+  // tap-vs-modifier distinction is tracked via ctrlComboFiredRef, since holding Ctrl to reach
+  // any of those combos also fires a bare Control keydown first.
+  useEffect(() => {
+    if (!isReady || showShortcuts) return
+
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Control') {
+        ctrlComboFiredRef.current = false
+        return
+      }
+
+      if (e.ctrlKey) {
+        if (e.key === 'ArrowLeft') {
+          e.preventDefault()
+          ctrlComboFiredRef.current = true
+          if (session) handleAdvance(session.currentSentenceIndex - 1)
+        } else if (e.key === 'ArrowRight') {
+          e.preventDefault()
+          ctrlComboFiredRef.current = true
+          if (session) handleAdvance(session.currentSentenceIndex + 1)
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault()
+          ctrlComboFiredRef.current = true
+          setResult(null)
+        } else if (e.key === 'Enter') {
+          e.preventDefault()
+          ctrlComboFiredRef.current = true
+          handleSkip()
+        } else if (e.key.toLowerCase() === 'm' && isSpeechRecognitionSupported()) {
+          e.preventDefault()
+          ctrlComboFiredRef.current = true
+          handleMicClick()
+        }
+        return
+      }
+
+      if (e.key === 'Enter') {
+        e.preventDefault()
+        if (result?.isCorrect && session) {
+          handleAdvance(session.currentSentenceIndex + 1)
+        } else {
+          handleSubmit()
+        }
+      }
+    }
+
+    function handleKeyUp(e: KeyboardEvent) {
+      if (e.key !== 'Control') return
+      if (!ctrlComboFiredRef.current) handleReplayClick()
+      ctrlComboFiredRef.current = false
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    window.addEventListener('keyup', handleKeyUp)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('keyup', handleKeyUp)
+    }
+  }, [isReady, showShortcuts, session, result, answer, isRecording, currentSentence])
+
+  if (error) return <p role="alert" style={{ color: 'var(--error)', fontWeight: 700 }}>{error}</p>
+
   const sentenceNumber = session ? session.currentSentenceIndex + 1 : 1
   const totalSentences = track.sentences.length
 
   return (
-    <div style={{ display: 'flex', gap: 32, width: '100%', maxWidth: 1040 }}>
+    <div style={{ display: 'flex', gap: 24, width: '100%', maxWidth: 1040 }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 18, width: 760, maxWidth: '100%' }}>
         {!isReady && <p style={{ color: 'var(--ink-soft)', fontWeight: 700 }}>Loading practice session...</p>}
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <span style={{ ...chipStyle, background: 'var(--primary-soft)', color: 'var(--primary-dark)' }}>
-            Sentence {sentenceNumber} / {totalSentences}
-          </span>
-          <div style={{ flex: 1, height: 10, background: 'var(--line)', borderRadius: 999, overflow: 'hidden' }}>
-            <div
-              style={{
-                width: `${(sentenceNumber / totalSentences) * 100}%`,
-                height: '100%',
-                background: 'var(--primary)',
-                borderRadius: 999
-              }}
-            />
-          </div>
-        </div>
-
-        <div style={{ ...cardStyle, padding: 32, display: 'flex', flexDirection: 'column', gap: 24 }}>
+        <div style={{ ...cardStyle, padding: 26, display: 'flex', flexDirection: 'column', gap: 24 }}>
           <audio ref={audioRef} src={audioObjectUrl ?? undefined} />
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <span style={{ ...chipStyle, background: 'var(--primary-soft)', color: 'var(--ink-soft)' }}>
+              Sentence {sentenceNumber} / {totalSentences}
+            </span>
+            <div style={{ flex: 1, height: 10, background: 'var(--line)', borderRadius: 999, overflow: 'hidden' }}>
+              <div
+                style={{
+                  width: `${(sentenceNumber / totalSentences) * 100}%`,
+                  height: '100%',
+                  background: 'var(--primary)',
+                  borderRadius: 999
+                }}
+              />
+            </div>
+          </div>
 
           <div
             style={{
@@ -287,6 +409,7 @@ export function SentencePracticeView({
               onClick={() => session && handleAdvance(session.currentSentenceIndex - 1)}
               disabled={!isReady || !session || session.currentSentenceIndex === 0}
               aria-label="Previous sentence"
+              title="Previous sentence (Ctrl+←)"
               style={{
                 width: 36,
                 height: 36,
@@ -332,6 +455,7 @@ export function SentencePracticeView({
               onClick={() => session && handleAdvance(session.currentSentenceIndex + 1)}
               disabled={!isReady}
               aria-label="Next sentence"
+              title="Next sentence (Ctrl+→)"
               style={{
                 width: 36,
                 height: 36,
@@ -366,6 +490,27 @@ export function SentencePracticeView({
             </span>
           </div>
 
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, margin: '-8px 0' }}>
+            <span style={{ fontSize: 12, color: 'var(--ink-faint)', fontWeight: 600 }}>
+              Press &quot;Ctrl&quot; to replay.
+            </span>
+            <button
+              onClick={() => setShowShortcuts(true)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                padding: 0,
+                fontSize: 12,
+                fontWeight: 700,
+                color: 'var(--ink-faint)',
+                cursor: 'pointer',
+                textDecoration: 'underline'
+              }}
+            >
+              View other shortcuts
+            </button>
+          </div>
+
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <textarea
               ref={textareaRef}
@@ -382,7 +527,7 @@ export function SentencePracticeView({
                 padding: '16px 18px',
                 fontSize: 17,
                 lineHeight: 1.8,
-                fontWeight: 600,
+                fontWeight: 400,
                 color: 'var(--ink)',
                 fontFamily: 'inherit',
                 resize: 'none',
@@ -396,16 +541,18 @@ export function SentencePracticeView({
                   <button
                     onClick={() => session && handleAdvance(session.currentSentenceIndex + 1)}
                     disabled={!isReady}
+                    title="Next (Enter)"
                     style={btnPrimarySmall}
                   >
                     Next
                   </button>
                 ) : (
                   <>
-                    <button onClick={handleSubmit} disabled={!isReady} style={{ ...btnPrimarySmall, opacity: isReady ? 1 : 0.5 }}>Check</button>
+                    <button onClick={handleSubmit} disabled={!isReady} title="Check (Enter)" style={{ ...btnPrimarySmall, opacity: isReady ? 1 : 0.5 }}>Check</button>
                     <button
-                      onClick={() => session && handleAdvance(session.currentSentenceIndex + 1)}
+                      onClick={handleSkip}
                       disabled={!isReady}
+                      title="Skip (Ctrl+Enter)"
                       style={{ ...btnGhostSmall, opacity: isReady ? 1 : 0.5 }}
                     >
                       Skip
@@ -417,6 +564,7 @@ export function SentencePracticeView({
                 <button
                   onClick={() => setResult(null)}
                   aria-label="Try again"
+                  title="Try again (Ctrl+↑)"
                   disabled={!isReady}
                   style={{
                     width: 40,
@@ -441,6 +589,7 @@ export function SentencePracticeView({
                 <button
                   onClick={handleMicClick}
                   aria-label={isRecording ? 'Stop microphone' : 'Use microphone'}
+                  title={isRecording ? 'Stop microphone (Ctrl+M)' : 'Use microphone (Ctrl+M)'}
                   disabled={!isReady}
                   style={{
                     position: 'relative',
@@ -460,6 +609,7 @@ export function SentencePracticeView({
                   {isRecording && (
                     <span
                       aria-label="Recording"
+                      className="recording-dot"
                       style={{
                         position: 'absolute',
                         top: 2,
@@ -492,8 +642,8 @@ export function SentencePracticeView({
                 gap: 10
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                {result.isCorrect ? (
+              {result.isCorrect ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <div
                     style={{
                       width: 28,
@@ -508,15 +658,10 @@ export function SentencePracticeView({
                   >
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><path d="M20 6L9 17l-5-5" /></svg>
                   </div>
-                ) : (
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--error)" strokeWidth="2.5"><circle cx="12" cy="12" r="10" /><path d="M12 8v5M12 16h.01" /></svg>
-                )}
-                <span style={{ fontWeight: 800, color: result.isCorrect ? 'var(--leaf-dark)' : 'var(--primary-dark)' }}>
-                  {result.isCorrect ? 'Nice — that\'s right!' : 'So close — try again!'}
-                </span>
-              </div>
-              {!result.isCorrect && (
-                <div style={{ fontSize: 17, lineHeight: 1.8, fontWeight: 600 }}>
+                  <span style={{ fontWeight: 800, color: 'var(--leaf-dark)' }}>Nice — that&apos;s right!</span>
+                </div>
+              ) : (
+                <div style={{ fontSize: 17, lineHeight: 1.8, fontWeight: 400 }}>
                   <DiffText words={result.words} variant="dictation" />
                 </div>
               )}
@@ -526,12 +671,12 @@ export function SentencePracticeView({
         </div>
       </div>
 
-      <div style={{ width: 260, display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <div style={{ ...cardStyle, padding: 22, display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <span style={{ fontWeight: 800, fontSize: 14, color: 'var(--ink-soft)' }}>Sentence Progress</span>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 10 }}>
+      <div style={{ width: 240, display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ ...cardStyle, padding: 18, display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <span style={{ fontWeight: 800, fontSize: 14, color: 'var(--ink-soft)' }}>Progress</span>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
             {track.sentences.map((s, i) => {
-              const isDone = session !== null && i < session.currentSentenceIndex
+              const isDone = completedIndices.has(i)
               const isCurrent = session !== null && i === session.currentSentenceIndex
               const digitCount = String(i + 1).length
               return (
@@ -567,6 +712,31 @@ export function SentencePracticeView({
           <span style={{ fontSize: 12, color: 'var(--ink-faint)', fontWeight: 600 }}>Tap any sentence to jump straight to it</span>
         </div>
       </div>
+
+      {showShortcuts && (
+        <div style={overlayStyle} onClick={() => setShowShortcuts(false)}>
+          <div style={modalStyle} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>Keyboard Shortcuts</h2>
+              <button
+                onClick={() => setShowShortcuts(false)}
+                aria-label="Close"
+                style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 20, color: 'var(--ink-faint)', lineHeight: 1 }}
+              >
+                ✕
+              </button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {SHORTCUTS.map((s) => (
+                <div key={s.keys} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+                  <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink-soft)' }}>{s.description}</span>
+                  <span style={keyBadgeStyle}>{s.keys}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -8,7 +8,7 @@ import { RecitationPanel } from './RecitationPanel'
 const cardStyle: React.CSSProperties = {
   background: 'var(--surface)',
   borderRadius: 24,
-  boxShadow: '0 10px 0 var(--line), 0 14px 28px oklch(22% 0.03 270 / 0.07)'
+  boxShadow: 'none'
 }
 
 function formatTime(seconds: number): string {
@@ -21,11 +21,9 @@ function formatTime(seconds: number): string {
 
 export function FullTextView({
   track,
-  onEnterSentenceMode,
   onRecitationCompleted
 }: {
   track: LearnerTrack
-  onEnterSentenceMode: (index: number) => void
   onRecitationCompleted: (accuracyScore: number) => void
 }) {
   const audioRef = useRef<HTMLAudioElement>(null)
@@ -36,15 +34,57 @@ export function FullTextView({
   const [showRecitation, setShowRecitation] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
+  const [isPlaying, setIsPlaying] = useState(false)
 
   useEffect(() => {
     if (showText) sentenceRefs.current[activeIndex]?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
   }, [activeIndex, showText])
 
+  useEffect(() => {
+    const audio = audioRef.current
+    if (!audio) return
+    function onPlay() {
+      setIsPlaying(true)
+    }
+    function onPause() {
+      setIsPlaying(false)
+    }
+    audio.addEventListener('play', onPlay)
+    audio.addEventListener('pause', onPause)
+    return () => {
+      audio.removeEventListener('play', onPlay)
+      audio.removeEventListener('pause', onPause)
+    }
+  }, [])
+
   function handleSpeedChange(value: string) {
     setSpeed(value)
     if (audioRef.current) audioRef.current.playbackRate = Number(value)
   }
+
+  function handlePlayPauseClick() {
+    const audio = audioRef.current
+    if (!audio) return
+    if (audio.paused) {
+      audio.play()
+    } else {
+      audio.pause()
+    }
+  }
+
+  // Space toggles play/pause, unless focus is on a form control (the speed select, or the
+  // recitation textarea when that panel is open) where a space must keep its native meaning.
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key !== ' ') return
+      const tag = (document.activeElement as HTMLElement | null)?.tagName
+      if (tag === 'SELECT' || tag === 'INPUT' || tag === 'TEXTAREA') return
+      e.preventDefault()
+      handlePlayPauseClick()
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
 
   function handleTimeUpdate() {
     if (!audioRef.current) return
@@ -73,17 +113,17 @@ export function FullTextView({
         onLoadedMetadata={() => setDuration(audioRef.current?.duration ?? 0)}
       />
 
-      <div style={{ ...cardStyle, padding: '22px 26px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
+      <div style={{ ...cardStyle, padding: '18px 22px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 18 }}>
           <button
-            onClick={() => audioRef.current?.play()}
-            aria-label="Play"
+            onClick={handlePlayPauseClick}
+            aria-label={isPlaying ? 'Pause' : 'Play'}
             style={{
-              width: 56,
-              height: 56,
+              width: 52,
+              height: 52,
               borderRadius: 999,
               background: 'var(--primary)',
-              boxShadow: '0 4px 0 var(--primary-dark)',
+              boxShadow: 'none',
               border: 'none',
               display: 'flex',
               alignItems: 'center',
@@ -92,26 +132,13 @@ export function FullTextView({
               cursor: 'pointer'
             }}
           >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z" /></svg>
+            {isPlaying ? (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><rect x="6" y="5" width="4" height="14" /><rect x="14" y="5" width="4" height="14" /></svg>
+            ) : (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z" /></svg>
+            )}
           </button>
-          <button
-            onClick={() => audioRef.current?.pause()}
-            style={{
-              background: 'transparent',
-              border: '2px solid var(--line)',
-              borderRadius: 999,
-              width: 40,
-              height: 40,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              flexShrink: 0
-            }}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="var(--ink-soft)"><rect x="6" y="5" width="4" height="14" /><rect x="14" y="5" width="4" height="14" /></svg>
-          </button>
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 22 }}>
             <div style={{ height: 8, background: 'var(--line)', borderRadius: 999, overflow: 'hidden' }}>
               <div style={{ width: `${progressPercent}%`, height: '100%', background: 'var(--primary)', borderRadius: 999 }} />
             </div>
@@ -125,6 +152,7 @@ export function FullTextView({
             value={speed}
             onChange={(e) => handleSpeedChange(e.target.value)}
             style={{
+              alignSelf: 'center',
               background: 'oklch(96% 0.01 80)',
               borderRadius: 999,
               padding: '8px 14px',
@@ -144,49 +172,50 @@ export function FullTextView({
           <button
             onClick={() => setShowRecitation(true)}
             style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
+              alignSelf: 'center',
               background: 'var(--primary)',
               color: 'white',
               fontWeight: 800,
               fontSize: 14,
               border: 'none',
               borderRadius: 999,
-              padding: '11px 20px',
-              boxShadow: '0 4px 0 var(--primary-dark)',
+              padding: '11px 24px',
+              boxShadow: 'none',
               cursor: 'pointer',
               whiteSpace: 'nowrap'
             }}
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z" /></svg>
-            Recite Full Text
+            Recite
           </button>
         </div>
       </div>
 
-      <div style={{ ...cardStyle, padding: 16, display: 'flex', flexDirection: 'column', gap: 2, maxHeight: 520, overflow: 'hidden', position: 'relative' }}>
+      <div style={{ ...cardStyle, padding: 14, display: 'flex', flexDirection: 'column', gap: 2, maxHeight: 520, overflow: 'hidden', position: 'relative' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px 12px' }}>
-          <span style={{ fontWeight: 800, fontSize: 13, color: 'var(--ink-faint)' }}>Synced Text</span>
-          {!showText && (
-            <button
-              onClick={() => setShowText(true)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                color: 'var(--primary-dark)',
-                fontWeight: 800,
-                fontSize: 13,
-                background: 'transparent',
-                border: 'none',
-                cursor: 'pointer'
-              }}
-            >
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--primary-dark)" strokeWidth="2"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" /><circle cx="12" cy="12" r="3" /></svg>
-              Show Text
-            </button>
-          )}
+          <button
+            onClick={() => setShowText(!showText)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              color: 'var(--ink)',
+              fontWeight: 800,
+              fontSize: 13,
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer'
+            }}
+          >
+            {showText ? (
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--ink)" strokeWidth="2"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" /><circle cx="12" cy="12" r="3" /><line x1="3" y1="21" x2="21" y2="3" /></svg>
+            ) : (
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--ink)" strokeWidth="2"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" /><circle cx="12" cy="12" r="3" /></svg>
+            )}
+            {showText ? 'Hide Text' : 'Show Text'}
+          </button>
+          <span style={{ fontSize: 13, color: 'var(--ink-faint)', fontWeight: 600 }}>
+            Tap the play icon at the end of a sentence to jump there.
+          </span>
         </div>
 
         {showText && (
@@ -207,30 +236,38 @@ export function FullTextView({
                     background: isActive ? 'var(--primary-soft)' : 'transparent'
                   }}
                 >
-                  <span style={{ fontWeight: 800, fontSize: 13, width: 22, flexShrink: 0, paddingTop: 2, color: isActive ? 'var(--primary)' : 'var(--ink-faint)' }}>
+                  <span style={{ fontWeight: 800, fontSize: 13, width: 22, flexShrink: 0, paddingTop: 2, color: isActive ? 'var(--ink)' : 'var(--ink-faint)' }}>
                     {i + 1}
                   </span>
                   <span
-                    onClick={() => onEnterSentenceMode(i)}
                     style={{
                       fontSize: 17,
-                      fontWeight: isActive ? 800 : 600,
+                      fontWeight: isActive ? 500 : 400,
                       lineHeight: 1.6,
-                      cursor: 'pointer',
-                      color: isActive ? 'var(--primary-dark)' : isDone ? 'var(--ink-soft)' : 'var(--ink-faint)'
+                      color: isActive ? 'var(--ink)' : isDone ? 'var(--ink-soft)' : 'var(--ink-faint)'
                     }}
                   >
                     {s.text}
                   </span>
-                  {isActive && (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); seekTo(i) }}
-                      aria-label={`Play sentence ${i + 1}`}
-                      style={{ marginLeft: 'auto', flexShrink: 0, background: 'transparent', border: 'none', cursor: 'pointer', padding: 0 }}
-                    >
-                      <svg width="19" height="19" viewBox="0 0 24 24" fill="var(--primary)"><path d="M8 5v14l11-7z" /></svg>
-                    </button>
-                  )}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); seekTo(i) }}
+                    aria-label={`Play sentence ${i + 1}`}
+                    style={{
+                      marginLeft: 'auto',
+                      flexShrink: 0,
+                      width: 24,
+                      height: 24,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      background: 'transparent',
+                      border: 'none',
+                      cursor: 'pointer',
+                      padding: 0
+                    }}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="var(--primary)"><path d="M8 5v14l11-7z" /></svg>
+                  </button>
                 </li>
               )
             })}
@@ -242,13 +279,10 @@ export function FullTextView({
         )}
       </div>
 
-      <span style={{ fontSize: 13, color: 'var(--ink-faint)', fontWeight: 600, textAlign: 'center' }}>
-        Text is hidden by default — tap &quot;Show Text&quot; to auto-scroll and highlight the current sentence as it plays. Tap any sentence to jump there or start per-sentence practice.
-      </span>
-
       {showRecitation && (
         <RecitationPanel
           trackId={track.id}
+          sentences={track.sentences}
           onCompleted={onRecitationCompleted}
           onClose={() => setShowRecitation(false)}
         />

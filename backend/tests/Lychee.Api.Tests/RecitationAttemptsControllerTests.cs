@@ -64,37 +64,46 @@ public class RecitationAttemptsControllerTests : IClassFixture<LycheeWebApplicat
         return track!.Id;
     }
 
-    [Fact]
-    public async Task Submit_PerfectRecitation_QualifiesAllSentences()
-    {
-        var admin = AdminClient();
-        var trackId = await CreateTrackWithTwoSentencesAsync(admin);
-
-        var response = await (await LearnerClientAsync()).PostAsJsonAsync($"/api/learner/tracks/{trackId}/recitation-attempts",
-            new { submittedText = "I saw the snowfall It was magical" });
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var result = await response.Content.ReadFromJsonAsync<RecitationAttemptResponse>();
-        Assert.Equal(1.0, result!.Score);
-        Assert.Equal(2, result.QualifiedSentenceIds.Count);
-    }
+    private static object BuildRequest(double score, List<Guid> qualifiedSentenceIds, string submittedText = "recited text") =>
+        new
+        {
+            submittedText,
+            score,
+            words = new List<object> { new { word = "I", status = "Correct" } },
+            qualifiedSentenceIds
+        };
 
     [Fact]
-    public async Task Submit_OneSentenceWrong_OnlyQualifiesTheCorrectOne()
+    public async Task Submit_RecordsThePrecomputedScoreAndQualifiedSentences()
     {
         var admin = AdminClient();
         var trackId = await CreateTrackWithTwoSentencesAsync(admin);
         var learner = await LearnerClientAsync();
         var trackResponse = await learner.GetAsync($"/api/learner/tracks/{trackId}");
         var track = await trackResponse.Content.ReadFromJsonAsync<LearnerTrackResponse>();
+        var qualifiedIds = track!.Sentences.Select(s => s.Id).ToList();
 
         var response = await learner.PostAsJsonAsync($"/api/learner/tracks/{trackId}/recitation-attempts",
-            new { submittedText = "I saw the snowfall completely different words" });
+            BuildRequest(1.0, qualifiedIds, "I saw the snowfall It was magical"));
 
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var result = await response.Content.ReadFromJsonAsync<RecitationAttemptResponse>();
-        Assert.Single(result!.QualifiedSentenceIds);
-        Assert.Equal(track!.Sentences[0].Id, result.QualifiedSentenceIds[0]);
-        Assert.True(result.Score < 1.0);
+        Assert.NotEqual(Guid.Empty, result!.Id);
+    }
+
+    [Fact]
+    public async Task Submit_LowScoringAttempt_IsStillRecorded()
+    {
+        // Unlike dictation's Submit, recitation has no retry-until-correct concept — every
+        // attempt is a permanent one-shot history entry, so a low score must still be accepted.
+        var admin = AdminClient();
+        var trackId = await CreateTrackWithTwoSentencesAsync(admin);
+        var learner = await LearnerClientAsync();
+
+        var response = await learner.PostAsJsonAsync($"/api/learner/tracks/{trackId}/recitation-attempts",
+            BuildRequest(0.2, new List<Guid>(), "completely different words"));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
     [Fact]
@@ -105,9 +114,9 @@ public class RecitationAttemptsControllerTests : IClassFixture<LycheeWebApplicat
         var learner = await LearnerClientAsync();
 
         var first = await learner.PostAsJsonAsync($"/api/learner/tracks/{trackId}/recitation-attempts",
-            new { submittedText = "wrong" });
+            BuildRequest(0.2, new List<Guid>(), "wrong"));
         var second = await learner.PostAsJsonAsync($"/api/learner/tracks/{trackId}/recitation-attempts",
-            new { submittedText = "I saw the snowfall It was magical" });
+            BuildRequest(1.0, new List<Guid>(), "I saw the snowfall It was magical"));
 
         Assert.Equal(HttpStatusCode.OK, first.StatusCode);
         Assert.Equal(HttpStatusCode.OK, second.StatusCode);
@@ -121,31 +130,30 @@ public class RecitationAttemptsControllerTests : IClassFixture<LycheeWebApplicat
     {
         var admin = AdminClient();
         var trackId = await CreateTrackWithTwoSentencesAsync(admin);
+        var learner = await LearnerClientAsync();
+        var trackResponse = await learner.GetAsync($"/api/learner/tracks/{trackId}");
+        var track = await trackResponse.Content.ReadFromJsonAsync<LearnerTrackResponse>();
+        var qualifiedIds = track!.Sentences.Select(s => s.Id).ToList();
         var userToken = await CreateLearnerTokenAsync();
 
         var firstClient = await LearnerClientAsync(userToken);
         var secondClient = await LearnerClientAsync(userToken);
 
         var firstCallTask = firstClient.PostAsJsonAsync($"/api/learner/tracks/{trackId}/recitation-attempts",
-            new { submittedText = "I saw the snowfall It was magical" });
+            BuildRequest(1.0, qualifiedIds, "I saw the snowfall It was magical"));
         var secondCallTask = secondClient.PostAsJsonAsync($"/api/learner/tracks/{trackId}/recitation-attempts",
-            new { submittedText = "I saw the snowfall It was magical" });
+            BuildRequest(1.0, qualifiedIds, "I saw the snowfall It was magical"));
         var responses = await Task.WhenAll(firstCallTask, secondCallTask);
 
         Assert.Equal(HttpStatusCode.OK, responses[0].StatusCode);
         Assert.Equal(HttpStatusCode.OK, responses[1].StatusCode);
-
-        var firstResult = await responses[0].Content.ReadFromJsonAsync<RecitationAttemptResponse>();
-        var secondResult = await responses[1].Content.ReadFromJsonAsync<RecitationAttemptResponse>();
-        Assert.Equal(2, firstResult!.QualifiedSentenceIds.Count);
-        Assert.Equal(2, secondResult!.QualifiedSentenceIds.Count);
     }
 
     [Fact]
     public async Task Submit_NonExistentTrack_Returns404()
     {
         var response = await (await LearnerClientAsync()).PostAsJsonAsync($"/api/learner/tracks/{Guid.NewGuid()}/recitation-attempts",
-            new { submittedText = "anything" });
+            BuildRequest(0.0, new List<Guid>(), "anything"));
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }

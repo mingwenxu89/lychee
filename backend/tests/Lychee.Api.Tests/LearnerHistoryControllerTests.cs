@@ -127,7 +127,7 @@ public class LearnerHistoryControllerTests : IClassFixture<LycheeWebApplicationF
         var learner = await LearnerClientAsync();
 
         await learner.PostAsJsonAsync($"/api/learner/tracks/{trackId}/recitation-attempts",
-            new { submittedText = "First sentence Second sentence" });
+            new { submittedText = "First sentence Second sentence", score = 1.0, words = new List<object>(), qualifiedSentenceIds = new List<Guid>() });
 
         var response = await learner.GetAsync("/api/learner/history");
 
@@ -147,7 +147,7 @@ public class LearnerHistoryControllerTests : IClassFixture<LycheeWebApplicationF
         var learner = await LearnerClientAsync();
         await learner.PostAsync($"/api/learner/tracks/{trackId}/practice-session/start", null);
         await learner.PostAsJsonAsync($"/api/learner/tracks/{trackId}/recitation-attempts",
-            new { submittedText = "First sentence Second sentence" });
+            new { submittedText = "First sentence Second sentence", score = 1.0, words = new List<object>(), qualifiedSentenceIds = new List<Guid>() });
 
         var beforeResponse = await learner.GetAsync("/api/learner/history");
         var beforeEntries = await beforeResponse.Content.ReadFromJsonAsync<List<HistoryEntryResponse>>();

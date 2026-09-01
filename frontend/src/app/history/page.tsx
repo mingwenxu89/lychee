@@ -45,7 +45,7 @@ export default function HistoryPage() {
   if (!entries) return <main style={{ padding: 40, color: 'var(--ink-soft)', fontWeight: 700 }}>Loading...</main>
 
   return (
-    <main style={{ padding: '36px 40px', display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 820, margin: '0 auto' }}>
+    <main style={{ padding: '20px 40px', display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 820, margin: '0 auto' }}>
       <h1 style={{ margin: 0, fontSize: 30, fontWeight: 700 }}>History</h1>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>

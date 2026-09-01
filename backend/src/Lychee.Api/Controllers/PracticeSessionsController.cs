@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Lychee.Api.Auth;
 using Lychee.Api.Content;
 using Lychee.Data;
@@ -12,7 +11,6 @@ namespace Lychee.Api.Controllers;
 public record PracticeSessionResponse(Guid Id, Guid TrackId, int CurrentSentenceIndex, string Status, DateTime? CompletedAt);
 public record WordDiffResponse(string Word, string Status);
 public record SubmitAnswerRequest(Guid SentenceId, string SubmittedText);
-public record SubmitAnswerResponse(double AccuracyScore, bool IsCorrect, List<WordDiffResponse> Words);
 public record AdvanceSessionRequest(int ToIndex);
 public record AdvanceSessionResponse(int CurrentSentenceIndex, bool IsCompleted, double? OverallAccuracy);
 
@@ -80,6 +78,9 @@ public class PracticeSessionsController : ControllerBase
         return Ok(ToResponse(session));
     }
 
+    // The frontend now computes correctness itself (see frontend/src/lib/textComparer.ts) and
+    // only ever calls this endpoint to record a correct answer — a wrong attempt never reaches
+    // the backend at all, so every PracticeRecord created here is, by construction, a match.
     [HttpPost("api/learner/practice-sessions/{sessionId}/submit")]
     public async Task<IActionResult> Submit(Guid sessionId, SubmitAnswerRequest request)
     {
@@ -90,17 +91,15 @@ public class PracticeSessionsController : ControllerBase
         var sentence = await _db.Sentences.FirstOrDefaultAsync(s => s.Id == request.SentenceId && s.TrackId == session.TrackId);
         if (sentence is null) return NotFound();
 
-        var comparison = TextComparer.Compare(sentence.Text, request.SubmittedText);
-
         _db.PracticeRecords.Add(new PracticeRecord
         {
             Id = Guid.NewGuid(),
             UserId = userId,
             SentenceId = sentence.Id,
             SubmittedText = request.SubmittedText,
-            IsCorrect = comparison.IsExactMatch,
-            AccuracyScore = comparison.AccuracyScore,
-            DiffDetail = JsonSerializer.Serialize(comparison.Words),
+            IsCorrect = true,
+            AccuracyScore = 1.0,
+            DiffDetail = "[]",
             CreatedAt = DateTime.UtcNow
         });
 
@@ -126,10 +125,7 @@ public class PracticeSessionsController : ControllerBase
         // either, and either one should not cost us the PracticeRecord added above.
         await DbErrorHelpers.SaveChangesRecoveringDailyPracticeLogRaceAsync(_db);
 
-        return Ok(new SubmitAnswerResponse(
-            comparison.AccuracyScore,
-            comparison.IsExactMatch,
-            comparison.Words.Select(w => new WordDiffResponse(w.Word, w.Status.ToString())).ToList()));
+        return NoContent();
     }
 
     [HttpPost("api/learner/practice-sessions/{sessionId}/advance")]

@@ -38,7 +38,7 @@ export function NavBar({ rankLabel, activityDays, userInitial }: NavBarProps) {
         alignItems: 'center',
         justifyContent: 'space-between',
         padding: '0 40px',
-        height: 76,
+        height: 60,
         background: 'var(--surface)',
         borderBottom: '1px solid var(--line)'
       }}

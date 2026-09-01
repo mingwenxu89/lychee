@@ -13,8 +13,10 @@ export type LearnerTrack = {
   unitId: string
   exerciseId: string
   title: string
+  description: string | null
   exerciseTitle: string
   level: string
+  wordsPerMinute: number
   duration: string
   audioUrl: string
   sentences: LearnerSentence[]
@@ -40,7 +42,6 @@ function TrackPageContent() {
   const [error, setError] = useState<string | null>(null)
   const [completion, setCompletion] = useState<{ accuracyScore: number; mode: 'sentence' | 'full' } | null>(null)
   const [practiceKey, setPracticeKey] = useState(0)
-  const [jumpToSentenceIndex, setJumpToSentenceIndex] = useState<number | null>(null)
 
   useEffect(() => {
     async function load() {
@@ -59,7 +60,6 @@ function TrackPageContent() {
 
   function handlePracticeAgain() {
     setCompletion(null)
-    setJumpToSentenceIndex(null)
     setPracticeKey((k) => k + 1)
   }
 
@@ -71,17 +71,12 @@ function TrackPageContent() {
     }
   }
 
-  function handleEnterSentenceMode(index: number) {
-    setJumpToSentenceIndex(index)
-    setMode('sentence')
-  }
-
   if (completion) {
     return (
       <main
         style={{
           padding: 40,
-          minHeight: 'calc(100vh - 76px)',
+          minHeight: 'calc(100vh - 60px)',
           background: 'oklch(22% 0.03 270 / 0.55)',
           display: 'flex',
           alignItems: 'center',
@@ -99,62 +94,69 @@ function TrackPageContent() {
   }
 
   return (
-    <main style={{ padding: '36px 40px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18 }}>
+    <main style={{ padding: '20px 40px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18 }}>
       <div style={{ alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: 6, color: 'var(--ink-faint)', fontSize: 15, fontWeight: 700 }}>
-        <Link href="/" style={{ color: 'oklch(55% 0.2 250)', textDecoration: 'none' }}>Home</Link>
+        <Link href="/" style={{ color: 'var(--ink)', textDecoration: 'underline' }}>Home</Link>
         <span>/</span>
-        <Link href={`/exercises/${track.exerciseId}`} style={{ color: 'oklch(55% 0.2 250)', textDecoration: 'none' }}>{track.exerciseTitle}</Link>
+        <Link href={`/exercises/${track.exerciseId}`} style={{ color: 'var(--ink)', textDecoration: 'underline' }}>{track.exerciseTitle}</Link>
         <span>/</span>
         <span style={{ color: 'var(--ink-soft)' }}>{track.title}</span>
       </div>
 
-      <div style={{ display: 'flex', gap: 8, background: 'oklch(96% 0.01 80)', padding: 6, borderRadius: 999, width: 'fit-content' }}>
-        <button
-          aria-current={mode === 'sentence' ? 'page' : undefined}
-          onClick={() => setMode('sentence')}
-          style={{
-            border: 'none',
-            borderRadius: 999,
-            fontWeight: 800,
-            fontSize: 14,
-            padding: '9px 22px',
-            cursor: 'pointer',
-            background: mode === 'sentence' ? 'var(--primary)' : 'transparent',
-            color: mode === 'sentence' ? 'white' : 'var(--ink-soft)'
-          }}
-        >
-          By Sentence
-        </button>
-        <button
-          aria-current={mode === 'full' ? 'page' : undefined}
-          onClick={() => setMode('full')}
-          style={{
-            border: 'none',
-            borderRadius: 999,
-            fontWeight: 800,
-            fontSize: 14,
-            padding: '9px 22px',
-            cursor: 'pointer',
-            background: mode === 'full' ? 'var(--primary)' : 'transparent',
-            color: mode === 'full' ? 'white' : 'var(--ink-soft)'
-          }}
-        >
-          Full Listen
-        </button>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, background: 'oklch(90% 0.012 80)', padding: 6, borderRadius: 999, width: 'fit-content' }}>
+          <button
+            aria-current={mode === 'sentence' ? 'page' : undefined}
+            onClick={() => setMode('sentence')}
+            style={{
+              border: 'none',
+              borderRadius: 999,
+              fontWeight: 800,
+              fontSize: 14,
+              padding: '9px 22px',
+              cursor: 'pointer',
+              background: mode === 'sentence' ? 'var(--primary)' : 'transparent',
+              color: mode === 'sentence' ? 'white' : 'var(--ink-soft)'
+            }}
+          >
+            By Sentence
+          </button>
+          <button
+            aria-current={mode === 'full' ? 'page' : undefined}
+            onClick={() => setMode('full')}
+            style={{
+              border: 'none',
+              borderRadius: 999,
+              fontWeight: 800,
+              fontSize: 14,
+              padding: '9px 22px',
+              cursor: 'pointer',
+              background: mode === 'full' ? 'var(--primary)' : 'transparent',
+              color: mode === 'full' ? 'white' : 'var(--ink-soft)'
+            }}
+          >
+            Full Listen
+          </button>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          {track.description && (
+            <span style={{ fontSize: 13, fontWeight: 400, color: 'var(--ink-soft)' }}>{track.description}</span>
+          )}
+          <span style={{ fontSize: 13, fontWeight: 400, color: 'var(--ink-soft)' }}>Vocab Level: {track.level}</span>
+          <span style={{ fontSize: 13, fontWeight: 400, color: 'var(--ink-soft)' }}>Speed: {track.wordsPerMinute} wpm</span>
+        </div>
       </div>
 
       {mode === 'sentence' ? (
         <SentencePracticeView
           key={practiceKey}
           track={track}
-          initialSentenceIndex={jumpToSentenceIndex}
           onCompleted={(accuracyScore) => setCompletion({ accuracyScore, mode: 'sentence' })}
         />
       ) : (
         <FullTextView
           key={practiceKey}
           track={track}
-          onEnterSentenceMode={handleEnterSentenceMode}
           onRecitationCompleted={(accuracyScore) => setCompletion({ accuracyScore, mode: 'full' })}
         />
       )}

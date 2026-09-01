@@ -76,7 +76,7 @@ export default function ExerciseDetailPage() {
   if (!detail) return <main style={{ padding: 40, color: 'var(--ink-soft)', fontWeight: 700 }}>Loading...</main>
 
   return (
-    <main style={{ padding: '36px 40px', display: 'flex', flexDirection: 'column', gap: 24 }}>
+    <main style={{ padding: '20px 40px', display: 'flex', flexDirection: 'column', gap: 24 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 15, fontWeight: 700 }}>
         <Link href="/" style={{ color: 'oklch(55% 0.2 250)', textDecoration: 'none' }}>Home</Link>
         <span style={{ color: 'var(--ink-faint)' }}>/</span>

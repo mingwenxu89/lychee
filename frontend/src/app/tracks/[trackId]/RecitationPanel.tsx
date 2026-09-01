@@ -2,9 +2,8 @@
 
 import { useState } from 'react'
 import { isSpeechRecognitionSupported, createContinuousRecognizer } from '@/lib/speechRecognition'
-import { DiffText, type WordDiff } from '@/components/DiffText'
-
-type RecitationResult = { id: string; score: number; words: WordDiff[]; qualifiedSentenceIds: string[]; createdAt: string }
+import { scoreRecitation, type RecitationScoreResult } from '@/lib/recitationScoring'
+import { DiffText } from '@/components/DiffText'
 
 const btnPrimary: React.CSSProperties = {
   background: 'var(--primary)',
@@ -63,16 +62,18 @@ const modalStyle: React.CSSProperties = {
 
 export function RecitationPanel({
   trackId,
+  sentences,
   onCompleted,
   onClose
 }: {
   trackId: string
+  sentences: { id: string; text: string }[]
   onCompleted: (accuracyScore: number) => void
   onClose: () => void
 }) {
   const [transcript, setTranscript] = useState('')
   const [isRecording, setIsRecording] = useState(false)
-  const [result, setResult] = useState<RecitationResult | null>(null)
+  const [result, setResult] = useState<RecitationScoreResult | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [recognizer] = useState(() => createContinuousRecognizer((text) => setTranscript(text)))
 
@@ -86,18 +87,25 @@ export function RecitationPanel({
     recognizer.stop()
   }
 
-  async function handleSubmit() {
+  // Every recitation attempt is a permanent one-shot history entry regardless of score (unlike
+  // dictation's retry-until-correct flow), so the result is shown immediately from the local
+  // computation while the record is saved to the backend in the background.
+  function handleSubmit() {
     setSubmitError(null)
-    const response = await fetch(`/api/learner/tracks/${trackId}/recitation-attempts`, {
+    const scored = scoreRecitation(sentences, transcript)
+    setResult(scored)
+    fetch(`/api/learner/tracks/${trackId}/recitation-attempts`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ submittedText: transcript })
+      body: JSON.stringify({
+        submittedText: transcript,
+        score: scored.score,
+        words: scored.words,
+        qualifiedSentenceIds: scored.qualifiedSentenceIds
+      })
+    }).then((response) => {
+      if (!response.ok) setSubmitError('Failed to save your recitation. Please try again.')
     })
-    if (!response.ok) {
-      setSubmitError('Failed to submit your recitation. Please try again.')
-      return
-    }
-    setResult(await response.json())
   }
 
   function handleReciteAgain() {
@@ -146,6 +154,8 @@ export function RecitationPanel({
               <DiffText words={result.words} />
             </div>
           </div>
+
+          {submitError && <p role="alert" style={{ color: 'var(--error)', fontWeight: 700, margin: 0 }}>{submitError}</p>}
 
           <div style={{ display: 'flex', gap: 14, justifyContent: 'flex-end' }}>
             <button onClick={handleReciteAgain} style={btnGhost}>Recite Again</button>
