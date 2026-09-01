@@ -13,7 +13,7 @@ describe('TrackPage', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
       new Response(JSON.stringify({
-        id: 'track-1', unitId: 'unit-1', exerciseId: 'exercise-1', level: 'A1', duration: '00:00:05',
+        id: 'track-1', unitId: 'unit-1', exerciseId: 'exercise-1', title: 'The First Snowfall', exerciseTitle: 'Verify Exercise', level: 'A1', duration: '00:00:05',
         audioUrl: 'https://example.test/audio.mp3',
         sentences: [{ id: 's1', index: 0, text: 'Hello.', startTime: '00:00:00', endTime: '00:00:02' }],
         nextTrackId: null
@@ -37,5 +37,14 @@ describe('TrackPage', () => {
     fireEvent.click(screen.getByText('Full Listen'))
 
     expect(screen.getByText('Full Listen')).toHaveAttribute('aria-current', 'page')
+  })
+
+  it('renders a breadcrumb with the Exercise and Track names, linking to Home and the Exercise', async () => {
+    render(<TrackPage />)
+    await screen.findByText('By Sentence')
+
+    expect(screen.getByText('Home').closest('a')).toHaveAttribute('href', '/')
+    expect(screen.getByText('Verify Exercise').closest('a')).toHaveAttribute('href', '/exercises/exercise-1')
+    expect(screen.getByText('The First Snowfall').closest('a')).toBeNull()
   })
 })

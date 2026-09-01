@@ -10,7 +10,7 @@ namespace Lychee.Api.Controllers;
 public record LearnerSentenceResponse(Guid Id, int Index, string Text, TimeSpan StartTime, TimeSpan EndTime);
 
 public record LearnerTrackResponse(
-    Guid Id, Guid UnitId, Guid ExerciseId, string Level, TimeSpan Duration,
+    Guid Id, Guid UnitId, Guid ExerciseId, string Title, string ExerciseTitle, string Level, TimeSpan Duration,
     string AudioUrl, List<LearnerSentenceResponse> Sentences, Guid? NextTrackId);
 
 [ApiController]
@@ -31,7 +31,7 @@ public class LearnerTracksController : ControllerBase
     {
         var track = await _db.Tracks
             .Include(t => t.Sentences)
-            .Include(t => t.Unit)
+            .Include(t => t.Unit).ThenInclude(u => u.Exercise)
             .FirstOrDefaultAsync(t => t.Id == id);
         if (track is null) return NotFound();
 
@@ -53,6 +53,7 @@ public class LearnerTracksController : ControllerBase
             .ToList();
 
         return Ok(new LearnerTrackResponse(
-            track.Id, track.UnitId, track.Unit.ExerciseId, track.Level, track.Duration, audioUrl, sentences, nextTrackId));
+            track.Id, track.UnitId, track.Unit.ExerciseId, track.Title, track.Unit.Exercise.Title,
+            track.Level, track.Duration, audioUrl, sentences, nextTrackId));
     }
 }

@@ -87,6 +87,35 @@ public class LearnerTracksControllerTests : IClassFixture<LycheeWebApplicationFa
     }
 
     [Fact]
+    public async Task Get_ReturnsTrackTitleAndExerciseTitle()
+    {
+        var admin = AdminClient();
+        var exerciseId = await CreateExerciseAsync(admin);
+        var unitId = await CreateUnitAsync(admin, exerciseId, 1);
+
+        using var form = new MultipartFormDataContent();
+        var audioContent = new ByteArrayContent(Encoding.UTF8.GetBytes("fake-audio"));
+        audioContent.Headers.ContentType = new MediaTypeHeaderValue("audio/mpeg");
+        form.Add(audioContent, "AudioFile", "track.mp3");
+        form.Add(new StringContent("1\n00:00:00,000 --> 00:00:02,000\nHello there.\n"), "SrtFile", "track.srt");
+        form.Add(new StringContent("A1"), "Level");
+        form.Add(new StringContent("The First Snowfall"), "Title");
+        var createResponse = await admin.PostAsync($"/api/admin/units/{unitId}/tracks", form);
+        var trackId = (await createResponse.Content.ReadFromJsonAsync<IdOnly>())!.Id;
+
+        var exerciseResponse = await admin.GetAsync($"/api/admin/exercises/{exerciseId}");
+        var exerciseTitle = (await exerciseResponse.Content.ReadFromJsonAsync<ExerciseTitleOnly>())!.Title;
+
+        var response = await LearnerClient().GetAsync($"/api/learner/tracks/{trackId}");
+
+        var track = await response.Content.ReadFromJsonAsync<LearnerTrackResponse>();
+        Assert.Equal("The First Snowfall", track!.Title);
+        Assert.Equal(exerciseTitle, track.ExerciseTitle);
+    }
+
+    private record ExerciseTitleOnly(string Title);
+
+    [Fact]
     public async Task Get_ComputesNextTrackId_AcrossUnitsInSameExercise()
     {
         var admin = AdminClient();

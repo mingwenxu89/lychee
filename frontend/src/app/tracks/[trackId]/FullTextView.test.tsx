@@ -4,7 +4,7 @@ import { FullTextView } from './FullTextView'
 import type { LearnerTrack } from './page'
 
 const track: LearnerTrack = {
-  id: 'track-1', unitId: 'unit-1', exerciseId: 'exercise-1', level: 'A1', duration: '00:00:04',
+  id: 'track-1', unitId: 'unit-1', exerciseId: 'exercise-1', title: 'Test Track', exerciseTitle: 'Test Exercise', level: 'A1', duration: '00:00:04',
   audioUrl: 'https://example.test/audio.mp3',
   sentences: [
     { id: 's1', index: 0, text: 'Hello there.', startTime: '00:00:00', endTime: '00:00:02' },

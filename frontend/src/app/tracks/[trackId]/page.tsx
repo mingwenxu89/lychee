@@ -1,6 +1,7 @@
 'use client'
 
 import { Suspense, useEffect, useState } from 'react'
+import Link from 'next/link'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { SentencePracticeView } from './SentencePracticeView'
 import { FullTextView } from './FullTextView'
@@ -11,6 +12,8 @@ export type LearnerTrack = {
   id: string
   unitId: string
   exerciseId: string
+  title: string
+  exerciseTitle: string
   level: string
   duration: string
   audioUrl: string
@@ -98,9 +101,11 @@ function TrackPageContent() {
   return (
     <main style={{ padding: '36px 40px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18 }}>
       <div style={{ alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: 6, color: 'var(--ink-faint)', fontSize: 15, fontWeight: 700 }}>
-        <span>Practice</span>
+        <Link href="/" style={{ color: 'inherit', textDecoration: 'none' }}>Home</Link>
         <span>/</span>
-        <span style={{ color: 'var(--ink-soft)' }}>Level {track.level}</span>
+        <Link href={`/exercises/${track.exerciseId}`} style={{ color: 'inherit', textDecoration: 'none' }}>{track.exerciseTitle}</Link>
+        <span>/</span>
+        <span style={{ color: 'var(--ink-soft)' }}>{track.title}</span>
       </div>
 
       <div style={{ display: 'flex', gap: 8, background: 'oklch(96% 0.01 80)', padding: 6, borderRadius: 999, width: 'fit-content' }}>
