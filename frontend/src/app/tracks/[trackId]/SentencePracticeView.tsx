@@ -72,7 +72,9 @@ export function SentencePracticeView({
   const [error, setError] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [elapsedInSentence, setElapsedInSentence] = useState(0)
+  const [isPlaying, setIsPlaying] = useState(false)
   const audioRef = useRef<HTMLAudioElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
     async function init() {
@@ -130,6 +132,40 @@ export function SentencePracticeView({
     return () => audio.removeEventListener('timeupdate', onTimeUpdate)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentSentence])
+
+  useEffect(() => {
+    const audio = audioRef.current
+    if (!audio) return
+    function onPlay() {
+      setIsPlaying(true)
+    }
+    function onPause() {
+      setIsPlaying(false)
+    }
+    audio.addEventListener('play', onPlay)
+    audio.addEventListener('pause', onPause)
+    return () => {
+      audio.removeEventListener('play', onPlay)
+      audio.removeEventListener('pause', onPause)
+    }
+  }, [])
+
+  useEffect(() => {
+    const textarea = textareaRef.current
+    if (!textarea) return
+    textarea.style.height = 'auto'
+    textarea.style.height = `${textarea.scrollHeight}px`
+  }, [answer])
+
+  function handlePlayPauseClick() {
+    const audio = audioRef.current
+    if (!audio) return
+    if (audio.paused) {
+      audio.play()
+    } else {
+      audio.pause()
+    }
+  }
 
   async function handleSubmit() {
     if (!session || !currentSentence) return
@@ -218,9 +254,29 @@ export function SentencePracticeView({
             }}
           >
             <button
-              onClick={() => audioRef.current?.play()}
+              onClick={() => session && handleAdvance(session.currentSentenceIndex - 1)}
+              disabled={!isReady || !session || session.currentSentenceIndex === 0}
+              aria-label="Previous sentence"
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 999,
+                background: 'transparent',
+                border: '2px solid var(--line)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+                cursor: isReady && session && session.currentSentenceIndex > 0 ? 'pointer' : 'default',
+                opacity: isReady && session && session.currentSentenceIndex > 0 ? 1 : 0.4
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--ink-soft)" strokeWidth="2.5"><path d="M15 6l-6 6 6 6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            </button>
+            <button
+              onClick={handlePlayPauseClick}
               disabled={!isReady}
-              aria-label="Play"
+              aria-label={isPlaying ? 'Pause' : 'Play'}
               style={{
                 width: 52,
                 height: 52,
@@ -236,7 +292,31 @@ export function SentencePracticeView({
                 opacity: isReady ? 1 : 0.5
               }}
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z" /></svg>
+              {isPlaying ? (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><rect x="6" y="5" width="4" height="14" /><rect x="14" y="5" width="4" height="14" /></svg>
+              ) : (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z" /></svg>
+              )}
+            </button>
+            <button
+              onClick={() => session && handleAdvance(session.currentSentenceIndex + 1)}
+              disabled={!isReady}
+              aria-label="Next sentence"
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 999,
+                background: 'transparent',
+                border: '2px solid var(--line)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+                cursor: isReady ? 'pointer' : 'default',
+                opacity: isReady ? 1 : 0.4
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--ink-soft)" strokeWidth="2.5"><path d="M9 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" /></svg>
             </button>
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 3, height: 32 }}>
               {[14, 24, 10, 30, 18, 8, 20, 12, 22, 10].map((height, i) => (
@@ -258,8 +338,9 @@ export function SentencePracticeView({
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <input
-                type="text"
+              <textarea
+                ref={textareaRef}
+                rows={3}
                 value={answer}
                 onChange={(e) => setAnswer(e.target.value)}
                 placeholder="Type what you hear"
@@ -269,11 +350,12 @@ export function SentencePracticeView({
                   border: '2px solid var(--line)',
                   borderRadius: 16,
                   padding: '16px 18px',
-                  minHeight: 64,
                   fontSize: 16,
                   fontWeight: 600,
                   color: 'var(--ink)',
-                  fontFamily: 'inherit'
+                  fontFamily: 'inherit',
+                  resize: 'none',
+                  overflow: 'hidden'
                 }}
               />
               {isSpeechRecognitionSupported() && (
@@ -346,13 +428,16 @@ export function SentencePracticeView({
                 Next
               </button>
             ) : (
-              <button
-                onClick={() => session && handleAdvance(session.currentSentenceIndex + 1)}
-                disabled={!isReady}
-                style={{ ...btnGhost, opacity: isReady ? 1 : 0.5 }}
-              >
-                Skip
-              </button>
+              <>
+                <button onClick={handleSubmit} disabled={!isReady} style={{ ...btnPrimary, opacity: isReady ? 1 : 0.5 }}>Check</button>
+                <button
+                  onClick={() => session && handleAdvance(session.currentSentenceIndex + 1)}
+                  disabled={!isReady}
+                  style={{ ...btnGhost, opacity: isReady ? 1 : 0.5 }}
+                >
+                  Skip
+                </button>
+              </>
             )}
           </div>
         </div>

@@ -156,6 +156,107 @@ describe('SentencePracticeView', () => {
     expect(screen.getByRole('textbox')).toHaveValue('my draft answer')
   })
 
+  it('toggles the play button to a pause icon while the audio plays', async () => {
+    mockFetchSequence([
+      new Response(new Blob(['audio-bytes']), { status: 200 }),
+      new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 })
+    ])
+
+    const { container } = render(<SentencePracticeView track={track} initialSentenceIndex={null} onCompleted={vi.fn()} />)
+    await waitFor(() => expect(screen.getByRole('button', { name: /submit/i })).not.toBeDisabled())
+
+    const audio = container.querySelector('audio')!
+    expect(screen.getByRole('button', { name: /^play$/i })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /^play$/i }))
+    fireEvent(audio, new Event('play'))
+    expect(await screen.findByRole('button', { name: /^pause$/i })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /^pause$/i }))
+    fireEvent(audio, new Event('pause'))
+    expect(await screen.findByRole('button', { name: /^play$/i })).toBeInTheDocument()
+  })
+
+  it('the previous-sentence button is disabled on the first sentence and jumps back otherwise', async () => {
+    mockFetchSequence([
+      new Response(new Blob(['audio-bytes']), { status: 200 }),
+      new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 1, status: 'InProgress', completedAt: null }), { status: 200 }),
+      new Response(JSON.stringify({ currentSentenceIndex: 0, isCompleted: false, overallAccuracy: null }), { status: 200 })
+    ])
+
+    render(<SentencePracticeView track={track} initialSentenceIndex={null} onCompleted={vi.fn()} />)
+    await waitFor(() => expect(screen.getByRole('button', { name: /submit/i })).not.toBeDisabled())
+
+    fireEvent.click(screen.getByRole('button', { name: /previous sentence/i }))
+
+    await waitFor(() => expect(fetch).toHaveBeenLastCalledWith('/api/learner/practice-sessions/session-1/advance', expect.objectContaining({
+      body: JSON.stringify({ toIndex: 0 })
+    })))
+  })
+
+  it('disables the previous-sentence button on the first sentence', async () => {
+    mockFetchSequence([
+      new Response(new Blob(['audio-bytes']), { status: 200 }),
+      new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 })
+    ])
+
+    render(<SentencePracticeView track={track} initialSentenceIndex={null} onCompleted={vi.fn()} />)
+    await waitFor(() => expect(screen.getByRole('button', { name: /submit/i })).not.toBeDisabled())
+
+    expect(screen.getByRole('button', { name: /previous sentence/i })).toBeDisabled()
+  })
+
+  it('the next-sentence button next to the play control advances like Skip', async () => {
+    mockFetchSequence([
+      new Response(new Blob(['audio-bytes']), { status: 200 }),
+      new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 }),
+      new Response(JSON.stringify({ currentSentenceIndex: 1, isCompleted: false, overallAccuracy: null }), { status: 200 })
+    ])
+
+    render(<SentencePracticeView track={track} initialSentenceIndex={null} onCompleted={vi.fn()} />)
+    await waitFor(() => expect(screen.getByRole('button', { name: /submit/i })).not.toBeDisabled())
+
+    fireEvent.click(screen.getByRole('button', { name: /next sentence/i }))
+
+    await waitFor(() => expect(fetch).toHaveBeenLastCalledWith('/api/learner/practice-sessions/session-1/advance', expect.objectContaining({
+      body: JSON.stringify({ toIndex: 1 })
+    })))
+  })
+
+  it('the answer field is a multi-line textarea with 3 default rows', async () => {
+    mockFetchSequence([
+      new Response(new Blob(['audio-bytes']), { status: 200 }),
+      new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 })
+    ])
+
+    render(<SentencePracticeView track={track} initialSentenceIndex={null} onCompleted={vi.fn()} />)
+    await waitFor(() => expect(screen.getByRole('button', { name: /submit/i })).not.toBeDisabled())
+
+    const field = screen.getByRole('textbox')
+    expect(field.tagName).toBe('TEXTAREA')
+    expect(field).toHaveAttribute('rows', '3')
+  })
+
+  it('Check submits the answer just like Submit', async () => {
+    mockFetchSequence([
+      new Response(new Blob(['audio-bytes']), { status: 200 }),
+      new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 }),
+      new Response(JSON.stringify({ accuracyScore: 1, isCorrect: true, words: [{ word: 'Hello', status: 'Correct' }] }), { status: 200 })
+    ])
+
+    render(<SentencePracticeView track={track} initialSentenceIndex={null} onCompleted={vi.fn()} />)
+    await waitFor(() => expect(screen.getByRole('button', { name: /submit/i })).not.toBeDisabled())
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Hello there.' } })
+    fireEvent.click(screen.getByRole('button', { name: /^check$/i }))
+
+    expect(await screen.findByText('Hello')).toBeInTheDocument()
+    expect(fetch).toHaveBeenLastCalledWith('/api/learner/practice-sessions/session-1/submit', expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({ sentenceId: 's1', submittedText: 'Hello there.' })
+    }))
+  })
+
   it('when initialSentenceIndex is provided, advances there immediately instead of resuming', async () => {
     mockFetchSequence([
       new Response(new Blob(['audio-bytes']), { status: 200 }),
