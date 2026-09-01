@@ -133,7 +133,7 @@ export default function ExerciseDetailPage() {
                       minWidth: 0
                     }}
                   >
-                    <div style={{ fontWeight: 700, fontSize: 14 }}>{track.title}</div>
+                    <div style={{ fontWeight: 700, fontSize: 16 }}>{track.title}</div>
                     {track.description && (
                       <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>{track.description}</div>
                     )}
