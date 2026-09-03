@@ -123,6 +123,25 @@ public class FullDictationSessionsControllerTests : IClassFixture<LycheeWebAppli
     }
 
     [Fact]
+    public async Task Checkpoint_WithDuplicateSentenceIdInSameRequest_SucceedsAndRecordsOnce()
+    {
+        var admin = AdminClient();
+        var (trackId, firstSentenceId, _) = await CreateTrackAsync(admin);
+        var learner = await LearnerClientAsync();
+        var session = await (await learner.PostAsync($"/api/learner/tracks/{trackId}/full-dictation-session/start", null))
+            .Content.ReadFromJsonAsync<FullDictationSessionResponse>();
+
+        var checkpointResponse = await learner.PostAsJsonAsync(
+            $"/api/learner/full-dictation-sessions/{session!.Id}/checkpoint",
+            new { currentRound = 2, currentPhase = "Blind", newlyCorrectSentenceIds = new[] { firstSentenceId, firstSentenceId } });
+        Assert.Equal(HttpStatusCode.NoContent, checkpointResponse.StatusCode);
+
+        var resumed = await (await learner.PostAsync($"/api/learner/tracks/{trackId}/full-dictation-session/start", null))
+            .Content.ReadFromJsonAsync<FullDictationSessionResponse>();
+        Assert.Equal(new[] { firstSentenceId }, resumed!.CorrectSentenceIds);
+    }
+
+    [Fact]
     public async Task Complete_MarksSessionCompletedAndReturnsScore()
     {
         var admin = AdminClient();

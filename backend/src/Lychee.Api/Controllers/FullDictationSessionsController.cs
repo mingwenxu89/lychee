@@ -145,7 +145,7 @@ public class FullDictationSessionsController : ControllerBase
             result.IsCorrect = true;
         }
 
-        foreach (var sentenceId in newlyCorrectSentenceIds.Where(id => !existingSentenceIds.Contains(id)))
+        foreach (var sentenceId in newlyCorrectSentenceIds.Distinct().Where(id => !existingSentenceIds.Contains(id)))
         {
             _db.FullDictationSentenceResults.Add(new FullDictationSentenceResult
             {
