@@ -6,6 +6,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { breadcrumbLinkStyle } from '@/lib/breadcrumbLinkStyle'
 import { SentencePracticeView } from './SentencePracticeView'
 import { FullTextView } from './FullTextView'
+import { FullDictationView } from './FullDictationView'
 import { CompletionPage } from './CompletionPage'
 
 export type LearnerSentence = { id: string; index: number; text: string; startTime: string; endTime: string; isFavorited: boolean }
@@ -42,9 +43,9 @@ function TrackPageContent() {
   const initialSentenceIndex = initialSentenceParam !== null ? Number(initialSentenceParam) : null
 
   const [track, setTrack] = useState<LearnerTrack | null>(null)
-  const [mode, setMode] = useState<'sentence' | 'full'>(initialMode)
+  const [mode, setMode] = useState<'sentence' | 'full' | 'dictation'>(initialMode)
   const [error, setError] = useState<string | null>(null)
-  const [completion, setCompletion] = useState<{ accuracyScore: number; mode: 'sentence' | 'full' } | null>(null)
+  const [completion, setCompletion] = useState<{ accuracyScore: number; mode: 'sentence' | 'full' | 'dictation' } | null>(null)
   const [practiceKey, setPracticeKey] = useState(0)
   const [isFavorited, setIsFavorited] = useState(false)
   const [isTogglingFavorite, setIsTogglingFavorite] = useState(false)
@@ -132,40 +133,42 @@ function TrackPageContent() {
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-        <div style={{ display: 'flex', gap: 8, background: 'oklch(90% 0.012 80)', padding: 6, borderRadius: 999, width: 'fit-content' }}>
-          <button
-            aria-current={mode === 'sentence' ? 'page' : undefined}
-            onClick={() => setMode('sentence')}
-            style={{
-              border: 'none',
-              borderRadius: 999,
-              fontWeight: 800,
-              fontSize: 14,
-              padding: '9px 22px',
-              cursor: 'pointer',
-              background: mode === 'sentence' ? 'var(--primary)' : 'transparent',
-              color: mode === 'sentence' ? 'white' : 'var(--ink-soft)'
-            }}
-          >
-            By Sentence
-          </button>
-          <button
-            aria-current={mode === 'full' ? 'page' : undefined}
-            onClick={() => setMode('full')}
-            style={{
-              border: 'none',
-              borderRadius: 999,
-              fontWeight: 800,
-              fontSize: 14,
-              padding: '9px 22px',
-              cursor: 'pointer',
-              background: mode === 'full' ? 'var(--primary)' : 'transparent',
-              color: mode === 'full' ? 'white' : 'var(--ink-soft)'
-            }}
-          >
-            Full Listen
-          </button>
-        </div>
+        {mode !== 'dictation' && (
+          <div style={{ display: 'flex', gap: 8, background: 'oklch(90% 0.012 80)', padding: 6, borderRadius: 999, width: 'fit-content' }}>
+            <button
+              aria-current={mode === 'sentence' ? 'page' : undefined}
+              onClick={() => setMode('sentence')}
+              style={{
+                border: 'none',
+                borderRadius: 999,
+                fontWeight: 800,
+                fontSize: 14,
+                padding: '9px 22px',
+                cursor: 'pointer',
+                background: mode === 'sentence' ? 'var(--primary)' : 'transparent',
+                color: mode === 'sentence' ? 'white' : 'var(--ink-soft)'
+              }}
+            >
+              By Sentence
+            </button>
+            <button
+              aria-current={mode === 'full' ? 'page' : undefined}
+              onClick={() => setMode('full')}
+              style={{
+                border: 'none',
+                borderRadius: 999,
+                fontWeight: 800,
+                fontSize: 14,
+                padding: '9px 22px',
+                cursor: 'pointer',
+                background: mode === 'full' ? 'var(--primary)' : 'transparent',
+                color: mode === 'full' ? 'white' : 'var(--ink-soft)'
+              }}
+            >
+              Full Listen
+            </button>
+          </div>
+        )}
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           {track.description && (
             <span style={{ fontSize: 13, fontWeight: 400, color: 'var(--ink-soft)' }}>{track.description}</span>
@@ -181,12 +184,19 @@ function TrackPageContent() {
           track={track}
           onCompleted={(accuracyScore) => setCompletion({ accuracyScore, mode: 'sentence' })}
         />
-      ) : (
+      ) : mode === 'full' ? (
         <FullTextView
           key={practiceKey}
           track={track}
           initialSentenceIndex={initialSentenceIndex}
           onRecitationCompleted={(accuracyScore) => setCompletion({ accuracyScore, mode: 'full' })}
+          onStartFullDictation={() => setMode('dictation')}
+        />
+      ) : (
+        <FullDictationView
+          key={practiceKey}
+          track={track}
+          onCompleted={(accuracyScore) => setCompletion({ accuracyScore, mode: 'dictation' })}
         />
       )}
     </main>

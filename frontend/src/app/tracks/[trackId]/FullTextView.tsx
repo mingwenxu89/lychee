@@ -11,6 +11,20 @@ const cardStyle: React.CSSProperties = {
   boxShadow: 'none'
 }
 
+const btnPrimary: React.CSSProperties = {
+  alignSelf: 'center',
+  background: 'var(--primary)',
+  color: 'white',
+  fontWeight: 800,
+  fontSize: 14,
+  border: 'none',
+  borderRadius: 999,
+  padding: '11px 24px',
+  boxShadow: 'none',
+  cursor: 'pointer',
+  whiteSpace: 'nowrap'
+}
+
 function formatTime(seconds: number): string {
   if (!Number.isFinite(seconds)) return '0:00'
   const total = Math.max(0, Math.round(seconds))
@@ -22,11 +36,13 @@ function formatTime(seconds: number): string {
 export function FullTextView({
   track,
   initialSentenceIndex,
-  onRecitationCompleted
+  onRecitationCompleted,
+  onStartFullDictation
 }: {
   track: LearnerTrack
   initialSentenceIndex?: number | null
   onRecitationCompleted: (accuracyScore: number) => void
+  onStartFullDictation: () => void
 }) {
   const audioRef = useRef<HTMLAudioElement>(null)
   const sentenceRefs = useRef<(HTMLLIElement | null)[]>([])
@@ -205,23 +221,11 @@ export function FullTextView({
             <option value="1.25">1.25x</option>
             <option value="1.5">1.5x</option>
           </select>
-          <button
-            onClick={() => setShowRecitation(true)}
-            style={{
-              alignSelf: 'center',
-              background: 'var(--primary)',
-              color: 'white',
-              fontWeight: 800,
-              fontSize: 14,
-              border: 'none',
-              borderRadius: 999,
-              padding: '11px 24px',
-              boxShadow: 'none',
-              cursor: 'pointer',
-              whiteSpace: 'nowrap'
-            }}
-          >
+          <button onClick={() => setShowRecitation(true)} style={btnPrimary}>
             Recite
+          </button>
+          <button onClick={onStartFullDictation} style={btnPrimary}>
+            Start Full Dictation
           </button>
         </div>
       </div>

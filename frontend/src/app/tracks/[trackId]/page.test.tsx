@@ -1,5 +1,11 @@
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { Blob as NodeBlob } from 'node:buffer'
+
+// jsdom's own `Blob` global doesn't implement `.stream()`, which Node's real `Response`
+// constructor (used for the audio-preload fixture below) requires. Same fix as
+// FullDictationView.test.tsx uses for the same jsdom-environment limitation.
+;(globalThis as unknown as { Blob: typeof Blob }).Blob = NodeBlob as unknown as typeof Blob
 
 vi.mock('next/navigation', () => ({
   useParams: () => ({ trackId: 'track-1' }),
@@ -37,6 +43,39 @@ describe('TrackPage', () => {
     fireEvent.click(screen.getByText('Full Listen'))
 
     expect(screen.getByText('Full Listen')).toHaveAttribute('aria-current', 'page')
+  })
+
+  it('switches to Full Dictation mode when Start Full Dictation is clicked from Full Listen, and back is not offered as a tab', async () => {
+    const fetchMock = vi.fn()
+    // 1: the track itself.
+    fetchMock.mockImplementationOnce(async () => new Response(JSON.stringify({
+      id: 'track-1', unitId: 'unit-1', exerciseId: 'exercise-1', title: 'The First Snowfall', description: null, exerciseTitle: 'Verify Exercise', level: 'A1', wordsPerMinute: 120, duration: '00:00:05',
+      audioUrl: 'https://example.test/audio.mp3',
+      sentences: [{ id: 's1', index: 0, text: 'Hello.', startTime: '00:00:00', endTime: '00:00:02' }],
+      nextTrackId: null
+    }), { status: 200 }))
+    // 2-3: SentencePracticeView mounts first (the default mode) and starts its own session —
+    // it must download the audio and start a practice session before we ever switch modes.
+    fetchMock.mockImplementationOnce(async () => new Response(new Blob(['audio-bytes']), { status: 200 }))
+    fetchMock.mockImplementationOnce(async () => new Response(JSON.stringify({
+      id: 'sentence-session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null
+    }), { status: 200 }))
+    // 4-5: FullDictationView mounts once Start Full Dictation is clicked.
+    fetchMock.mockImplementationOnce(async () => new Response(new Blob(['audio-bytes']), { status: 200 }))
+    fetchMock.mockImplementationOnce(async () => new Response(JSON.stringify({
+      id: 'session-1', trackId: 'track-1', status: 'InProgress', currentRound: 1, currentPhase: 'Blind', correctSentenceIds: [], completedAt: null
+    }), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<TrackPage />)
+    await screen.findByText('By Sentence')
+
+    fireEvent.click(screen.getByRole('button', { name: /full listen/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /start full dictation/i }))
+
+    expect(await screen.findByText(/round 1/i)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^by sentence$/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^full listen$/i })).not.toBeInTheDocument()
   })
 
   it('renders a breadcrumb with the Exercise and Track names, linking to Exercises and the Exercise', async () => {
