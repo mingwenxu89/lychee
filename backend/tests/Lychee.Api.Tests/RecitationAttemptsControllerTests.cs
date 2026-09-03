@@ -45,7 +45,7 @@ public class RecitationAttemptsControllerTests : IClassFixture<LycheeWebApplicat
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         var exerciseResponse = await adminClient.PostAsJsonAsync("/api/admin/exercises",
-            new { title = $"Exercise {suffix}", description = (string?)null, coverImageUrl = (string?)null, category = "Short Stories" });
+            new { title = $"Exercise {suffix}", description = (string?)null, coverImageUrl = (string?)null });
         var exercise = await exerciseResponse.Content.ReadFromJsonAsync<IdOnly>();
         var unitResponse = await adminClient.PostAsJsonAsync($"/api/admin/exercises/{exercise!.Id}/units",
             new { title = "Unit 1", order = 1 });

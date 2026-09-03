@@ -23,13 +23,13 @@ public class UnitsControllerTests : IClassFixture<LycheeWebApplicationFactory>
     }
 
     [Fact]
-    public async Task CreateListUpdateDelete_UnderAnExercise_AllSucceed()
+    public async Task CreateListUpdate_UnderAnExercise_AllSucceed()
     {
         var client = AdminClient();
         var suffix = Guid.NewGuid().ToString("N")[..8];
 
         var exerciseResponse = await client.PostAsJsonAsync("/api/admin/exercises",
-            new { title = $"Exercise {suffix}", description = (string?)null, coverImageUrl = (string?)null, category = "Short Stories" });
+            new { title = $"Exercise {suffix}", description = (string?)null, coverImageUrl = (string?)null });
         var exercise = await exerciseResponse.Content.ReadFromJsonAsync<ExerciseIdOnly>();
 
         var createResponse = await client.PostAsJsonAsync($"/api/admin/exercises/{exercise!.Id}/units",
@@ -48,9 +48,23 @@ public class UnitsControllerTests : IClassFixture<LycheeWebApplicationFactory>
         Assert.Equal(HttpStatusCode.OK, updateResponse.StatusCode);
         var updated = await updateResponse.Content.ReadFromJsonAsync<UnitResponse>();
         Assert.Equal(2, updated!.Order);
+    }
 
-        var deleteResponse = await client.DeleteAsync($"/api/admin/units/{created.Id}");
-        Assert.Equal(HttpStatusCode.NoContent, deleteResponse.StatusCode);
+    [Fact]
+    public async Task NoDeleteEndpoint_Exists()
+    {
+        var client = AdminClient();
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        var exerciseResponse = await client.PostAsJsonAsync("/api/admin/exercises",
+            new { title = $"Exercise {suffix}", description = (string?)null, coverImageUrl = (string?)null });
+        var exercise = await exerciseResponse.Content.ReadFromJsonAsync<ExerciseIdOnly>();
+        var createResponse = await client.PostAsJsonAsync($"/api/admin/exercises/{exercise!.Id}/units",
+            new { title = "Unit 1", order = 1 });
+        var created = await createResponse.Content.ReadFromJsonAsync<UnitResponse>();
+
+        var deleteResponse = await client.DeleteAsync($"/api/admin/units/{created!.Id}");
+
+        Assert.Equal(HttpStatusCode.MethodNotAllowed, deleteResponse.StatusCode);
     }
 
     [Fact]

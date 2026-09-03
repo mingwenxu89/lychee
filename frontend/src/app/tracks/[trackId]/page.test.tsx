@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 
 vi.mock('next/navigation', () => ({
@@ -39,11 +39,11 @@ describe('TrackPage', () => {
     expect(screen.getByText('Full Listen')).toHaveAttribute('aria-current', 'page')
   })
 
-  it('renders a breadcrumb with the Exercise and Track names, linking to Home and the Exercise', async () => {
+  it('renders a breadcrumb with the Exercise and Track names, linking to Exercises and the Exercise', async () => {
     render(<TrackPage />)
     await screen.findByText('By Sentence')
 
-    expect(screen.getByText('Home').closest('a')).toHaveAttribute('href', '/')
+    expect(screen.getByText('Exercises').closest('a')).toHaveAttribute('href', '/')
     expect(screen.getByText('Verify Exercise').closest('a')).toHaveAttribute('href', '/exercises/exercise-1')
     expect(screen.getByText('The First Snowfall').closest('a')).toBeNull()
   })
@@ -70,5 +70,24 @@ describe('TrackPage', () => {
     await screen.findByText('By Sentence')
 
     expect(screen.getByText('A short passage about winter.')).toBeInTheDocument()
+  })
+
+  it('toggles the track favorite button and calls the favorite endpoint', async () => {
+    render(<TrackPage />)
+    await screen.findByText('By Sentence')
+
+    const favoriteButton = screen.getByRole('button', { name: 'Add to favorites' })
+    fireEvent.click(favoriteButton)
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith('/api/learner/tracks/track-1/favorite', { method: 'PUT' })
+    })
+    expect(await screen.findByRole('button', { name: 'Remove from favorites' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove from favorites' }))
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith('/api/learner/tracks/track-1/favorite', { method: 'DELETE' })
+    })
+    expect(await screen.findByRole('button', { name: 'Add to favorites' })).toBeInTheDocument()
   })
 })

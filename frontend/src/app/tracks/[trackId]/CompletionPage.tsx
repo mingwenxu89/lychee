@@ -10,7 +10,7 @@ const btnPrimary: React.CSSProperties = {
   border: 'none',
   borderRadius: 999,
   padding: '14px 32px',
-  boxShadow: '0 5px 0 var(--primary-dark)',
+  boxShadow: 'none',
   cursor: 'pointer'
 }
 
@@ -40,7 +40,7 @@ export function CompletionPage({
 
   useEffect(() => {
     async function loadQuote() {
-      const response = await fetch('/api/learner/encouragement-quotes/random')
+      const response = await fetch('/api/learner/quotes/random')
       if (response.ok) {
         const data = await response.json()
         setQuote(data.text)
@@ -56,7 +56,7 @@ export function CompletionPage({
         maxWidth: '92vw',
         background: 'var(--surface)',
         borderRadius: 32,
-        boxShadow: '0 16px 0 var(--line), 0 24px 48px oklch(22% 0.03 270 / 0.25)',
+        boxShadow: 'none',
         padding: '44px 48px',
         display: 'flex',
         flexDirection: 'column',

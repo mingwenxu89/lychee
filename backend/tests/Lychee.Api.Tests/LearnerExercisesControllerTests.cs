@@ -45,7 +45,7 @@ public class LearnerExercisesControllerTests : IClassFixture<LycheeWebApplicatio
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         var exerciseResponse = await admin.PostAsJsonAsync("/api/admin/exercises",
-            new { title = $"Exercise {suffix}", description = (string?)null, coverImageUrl = (string?)null, category = "Short Stories" });
+            new { title = $"Exercise {suffix}", description = (string?)null, coverImageUrl = (string?)null });
         var exercise = await exerciseResponse.Content.ReadFromJsonAsync<IdOnly>();
 
         var unitResponse = await admin.PostAsJsonAsync($"/api/admin/exercises/{exercise!.Id}/units",
@@ -69,7 +69,7 @@ public class LearnerExercisesControllerTests : IClassFixture<LycheeWebApplicatio
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         var exerciseResponse = await admin.PostAsJsonAsync("/api/admin/exercises",
-            new { title = $"Exercise {suffix}", description = (string?)null, coverImageUrl = (string?)null, category = "Short Stories" });
+            new { title = $"Exercise {suffix}", description = (string?)null, coverImageUrl = (string?)null });
         var exercise = await exerciseResponse.Content.ReadFromJsonAsync<IdOnly>();
 
         var unitResponse = await admin.PostAsJsonAsync($"/api/admin/exercises/{exercise!.Id}/units",

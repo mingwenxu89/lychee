@@ -6,7 +6,7 @@ import Link from 'next/link'
 type HistoryEntry = {
   trackId: string
   trackTitle: string
-  exerciseCategory: string
+  exerciseTitle: string
   practiceType: 'Practice' | 'Recitation'
   status: 'InProgress' | 'Completed'
   accuracy: number | null
@@ -76,7 +76,7 @@ export default function HistoryPage() {
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
                 <span style={{ fontWeight: 700, fontSize: 16 }}>{entry.trackTitle}</span>
                 <span style={{ fontSize: 13, color: 'var(--ink-faint)', fontWeight: 600 }}>
-                  {entry.exerciseCategory} · {entry.practiceType} · {formatRelativeTime(entry.timestamp)}
+                  {entry.exerciseTitle} · {entry.practiceType} · {formatRelativeTime(entry.timestamp)}
                 </span>
               </div>
 
@@ -96,7 +96,7 @@ export default function HistoryPage() {
                 href={href}
                 style={{
                   background: 'var(--primary)', color: 'white', fontWeight: 800, fontSize: 13,
-                  borderRadius: 999, padding: '9px 18px', boxShadow: '0 3px 0 var(--primary-dark)',
+                  borderRadius: 999, padding: '9px 18px', boxShadow: 'none',
                   textDecoration: 'none', whiteSpace: 'nowrap'
                 }}
               >

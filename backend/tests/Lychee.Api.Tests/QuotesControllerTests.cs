@@ -7,11 +7,11 @@ using Xunit;
 
 namespace Lychee.Api.Tests;
 
-public class EncouragementQuotesControllerTests : IClassFixture<LycheeWebApplicationFactory>
+public class QuotesControllerTests : IClassFixture<LycheeWebApplicationFactory>
 {
     private readonly LycheeWebApplicationFactory _factory;
 
-    public EncouragementQuotesControllerTests(LycheeWebApplicationFactory factory) => _factory = factory;
+    public QuotesControllerTests(LycheeWebApplicationFactory factory) => _factory = factory;
 
     private HttpClient AdminClient()
     {
@@ -27,23 +27,23 @@ public class EncouragementQuotesControllerTests : IClassFixture<LycheeWebApplica
     {
         var client = AdminClient();
 
-        var createResponse = await client.PostAsJsonAsync("/api/admin/encouragement-quotes",
+        var createResponse = await client.PostAsJsonAsync("/api/admin/quotes",
             new { text = "Great job — keep going!" });
         Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
         var created = await createResponse.Content.ReadFromJsonAsync<QuoteResponse>();
         Assert.True(created!.IsActive);
 
-        var listResponse = await client.GetAsync("/api/admin/encouragement-quotes");
+        var listResponse = await client.GetAsync("/api/admin/quotes");
         var list = await listResponse.Content.ReadFromJsonAsync<List<QuoteResponse>>();
         Assert.Contains(list!, q => q.Id == created.Id);
 
-        var updateResponse = await client.PutAsJsonAsync($"/api/admin/encouragement-quotes/{created.Id}",
+        var updateResponse = await client.PutAsJsonAsync($"/api/admin/quotes/{created.Id}",
             new { text = "Updated quote", isActive = false });
         Assert.Equal(HttpStatusCode.OK, updateResponse.StatusCode);
         var updated = await updateResponse.Content.ReadFromJsonAsync<QuoteResponse>();
         Assert.False(updated!.IsActive);
 
-        var deleteResponse = await client.DeleteAsync($"/api/admin/encouragement-quotes/{created.Id}");
+        var deleteResponse = await client.DeleteAsync($"/api/admin/quotes/{created.Id}");
         Assert.Equal(HttpStatusCode.NoContent, deleteResponse.StatusCode);
     }
 

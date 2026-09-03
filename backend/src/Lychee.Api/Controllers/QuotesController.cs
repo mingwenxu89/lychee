@@ -11,28 +11,28 @@ public record UpdateQuoteRequest(string Text, bool IsActive);
 public record QuoteResponse(Guid Id, string Text, bool IsActive);
 
 [ApiController]
-[Route("api/admin/encouragement-quotes")]
+[Route("api/admin/quotes")]
 [Authorize(Roles = "Admin")]
-public class EncouragementQuotesController : ControllerBase
+public class QuotesController : ControllerBase
 {
     private readonly LycheeDbContext _db;
 
-    public EncouragementQuotesController(LycheeDbContext db) => _db = db;
+    public QuotesController(LycheeDbContext db) => _db = db;
 
-    private static QuoteResponse ToResponse(EncouragementQuote q) => new(q.Id, q.Text, q.IsActive);
+    private static QuoteResponse ToResponse(Quote q) => new(q.Id, q.Text, q.IsActive);
 
     [HttpGet]
     public async Task<IActionResult> List()
     {
-        var quotes = await _db.EncouragementQuotes.ToListAsync();
+        var quotes = await _db.Quotes.ToListAsync();
         return Ok(quotes.Select(ToResponse));
     }
 
     [HttpPost]
     public async Task<IActionResult> Create(CreateQuoteRequest request)
     {
-        var quote = new EncouragementQuote { Id = Guid.NewGuid(), Text = request.Text, IsActive = true };
-        _db.EncouragementQuotes.Add(quote);
+        var quote = new Quote { Id = Guid.NewGuid(), Text = request.Text, IsActive = true };
+        _db.Quotes.Add(quote);
         await _db.SaveChangesAsync();
         return CreatedAtAction(nameof(List), ToResponse(quote));
     }
@@ -40,7 +40,7 @@ public class EncouragementQuotesController : ControllerBase
     [HttpPut("{id}")]
     public async Task<IActionResult> Update(Guid id, UpdateQuoteRequest request)
     {
-        var quote = await _db.EncouragementQuotes.FindAsync(id);
+        var quote = await _db.Quotes.FindAsync(id);
         if (quote is null) return NotFound();
 
         quote.Text = request.Text;
@@ -52,10 +52,10 @@ public class EncouragementQuotesController : ControllerBase
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(Guid id)
     {
-        var quote = await _db.EncouragementQuotes.FindAsync(id);
+        var quote = await _db.Quotes.FindAsync(id);
         if (quote is null) return NotFound();
 
-        _db.EncouragementQuotes.Remove(quote);
+        _db.Quotes.Remove(quote);
         await _db.SaveChangesAsync();
         return NoContent();
     }

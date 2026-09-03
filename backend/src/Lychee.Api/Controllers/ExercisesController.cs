@@ -6,9 +6,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Lychee.Api.Controllers;
 
-public record CreateExerciseRequest(string Title, string? Description, string? CoverImageUrl, string Category);
-public record UpdateExerciseRequest(string Title, string? Description, string? CoverImageUrl, string Category);
-public record ExerciseResponse(Guid Id, string Title, string? Description, string? CoverImageUrl, string Category, bool IsPublished);
+public record CreateExerciseRequest(string Title, string? Description, string? CoverImageUrl, int Order);
+public record UpdateExerciseRequest(string Title, string? Description, string? CoverImageUrl, int Order);
+public record ExerciseResponse(Guid Id, string Title, string? Description, string? CoverImageUrl, int Order, bool IsPublished);
 public record UpdatePublishStatusRequest(bool IsPublished);
 
 [ApiController]
@@ -21,12 +21,12 @@ public class ExercisesController : ControllerBase
     public ExercisesController(LycheeDbContext db) => _db = db;
 
     private static ExerciseResponse ToResponse(Exercise e) =>
-        new(e.Id, e.Title, e.Description, e.CoverImageUrl, e.Category, e.IsPublished);
+        new(e.Id, e.Title, e.Description, e.CoverImageUrl, e.Order, e.IsPublished);
 
     [HttpGet]
     public async Task<IActionResult> List()
     {
-        var exercises = await _db.Exercises.OrderBy(e => e.Title).ToListAsync();
+        var exercises = await _db.Exercises.OrderBy(e => e.Order).ToListAsync();
         return Ok(exercises.Select(ToResponse));
     }
 
@@ -46,7 +46,7 @@ public class ExercisesController : ControllerBase
             Title = request.Title,
             Description = request.Description,
             CoverImageUrl = request.CoverImageUrl,
-            Category = request.Category
+            Order = request.Order
         };
         _db.Exercises.Add(exercise);
         await _db.SaveChangesAsync();
@@ -62,20 +62,9 @@ public class ExercisesController : ControllerBase
         exercise.Title = request.Title;
         exercise.Description = request.Description;
         exercise.CoverImageUrl = request.CoverImageUrl;
-        exercise.Category = request.Category;
+        exercise.Order = request.Order;
         await _db.SaveChangesAsync();
         return Ok(ToResponse(exercise));
-    }
-
-    [HttpDelete("{id}")]
-    public async Task<IActionResult> Delete(Guid id)
-    {
-        var exercise = await _db.Exercises.FindAsync(id);
-        if (exercise is null) return NotFound();
-
-        _db.Exercises.Remove(exercise);
-        await _db.SaveChangesAsync();
-        return NoContent();
     }
 
     [HttpPatch("{id}/publish-status")]

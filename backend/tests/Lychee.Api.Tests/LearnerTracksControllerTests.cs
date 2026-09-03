@@ -60,7 +60,7 @@ public class LearnerTracksControllerTests : IClassFixture<LycheeWebApplicationFa
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         var response = await adminClient.PostAsJsonAsync("/api/admin/exercises",
-            new { title = $"Exercise {suffix}", description = (string?)null, coverImageUrl = (string?)null, category = "Short Stories" });
+            new { title = $"Exercise {suffix}", description = (string?)null, coverImageUrl = (string?)null });
         var exercise = await response.Content.ReadFromJsonAsync<IdOnly>();
         return exercise!.Id;
     }

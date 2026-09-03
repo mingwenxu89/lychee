@@ -118,33 +118,11 @@ namespace Lychee.Data.Migrations
                     b.ToTable("DailyPracticeLogs");
                 });
 
-            modelBuilder.Entity("Lychee.Data.Entities.EncouragementQuote", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("Text")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("EncouragementQuotes");
-                });
-
             modelBuilder.Entity("Lychee.Data.Entities.Exercise", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
-
-                    b.Property<string>("Category")
-                        .IsRequired()
-                        .HasColumnType("text");
 
                     b.Property<string>("CoverImageUrl")
                         .HasColumnType("text");
@@ -156,6 +134,9 @@ namespace Lychee.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
                         .HasDefaultValue(true);
+
+                    b.Property<int>("Order")
+                        .HasColumnType("integer");
 
                     b.Property<string>("Title")
                         .IsRequired()
@@ -236,6 +217,24 @@ namespace Lychee.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("PracticeSessions");
+                });
+
+            modelBuilder.Entity("Lychee.Data.Entities.Quote", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Quotes");
                 });
 
             modelBuilder.Entity("Lychee.Data.Entities.RecitationAttempt", b =>

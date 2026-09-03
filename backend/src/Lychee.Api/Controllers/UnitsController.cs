@@ -69,17 +69,6 @@ public class UnitsController : ControllerBase
         return Ok(ToResponse(unit));
     }
 
-    [HttpDelete("api/admin/units/{id}")]
-    public async Task<IActionResult> Delete(Guid id)
-    {
-        var unit = await _db.Units.FindAsync(id);
-        if (unit is null) return NotFound();
-
-        _db.Units.Remove(unit);
-        await _db.SaveChangesAsync();
-        return NoContent();
-    }
-
     [HttpPatch("api/admin/units/{id}/publish-status")]
     public async Task<IActionResult> SetPublishStatus(Guid id, UpdatePublishStatusRequest request)
     {

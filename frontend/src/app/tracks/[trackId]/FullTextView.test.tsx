@@ -7,10 +7,11 @@ const track: LearnerTrack = {
   id: 'track-1', unitId: 'unit-1', exerciseId: 'exercise-1', title: 'Test Track', description: null, exerciseTitle: 'Test Exercise', level: 'A1', wordsPerMinute: 120, duration: '00:00:04',
   audioUrl: 'https://example.test/audio.mp3',
   sentences: [
-    { id: 's1', index: 0, text: 'Hello there.', startTime: '00:00:00', endTime: '00:00:02' },
-    { id: 's2', index: 1, text: 'Good morning.', startTime: '00:00:02', endTime: '00:00:04' }
+    { id: 's1', index: 1, text: 'Hello there.', startTime: '00:00:00', endTime: '00:00:02', isFavorited: false },
+    { id: 's2', index: 2, text: 'Good morning.', startTime: '00:00:02', endTime: '00:00:04', isFavorited: false }
   ],
-  nextTrackId: null
+  nextTrackId: null,
+  isFavorited: false
 }
 
 beforeEach(() => {
@@ -108,5 +109,32 @@ describe('FullTextView', () => {
     select.blur()
     fireEvent.keyDown(window, { key: ' ' })
     expect(window.HTMLMediaElement.prototype.play).toHaveBeenCalled()
+  })
+
+  it('toggles a sentence favorite and calls the favorite endpoint, without seeking or navigating', () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<FullTextView track={track} onRecitationCompleted={vi.fn()} />)
+    fireEvent.click(screen.getByRole('button', { name: /show text/i }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add sentence 2 to favorites' }))
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/learner/sentences/s2/favorite', { method: 'PUT' })
+    expect(window.HTMLMediaElement.prototype.play).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Remove sentence 2 from favorites' })).toBeInTheDocument()
+
+    vi.unstubAllGlobals()
+  })
+
+  it('seeks to the initial sentence and reveals the text, without autoplaying', () => {
+    // initialSentenceIndex is the sentence's `index` field (caption cue number), not its
+    // array position — sentence "Good morning." has index 2 but sits at array position 1.
+    render(<FullTextView track={track} initialSentenceIndex={2} onRecitationCompleted={vi.fn()} />)
+
+    const audio = document.querySelector('audio')!
+    expect(audio.currentTime).toBe(2)
+    expect(window.HTMLMediaElement.prototype.play).not.toHaveBeenCalled()
+    expect(screen.getByText('Good morning.')).toBeInTheDocument()
   })
 })

@@ -15,10 +15,11 @@ const track: LearnerTrack = {
   id: 'track-1', unitId: 'unit-1', exerciseId: 'exercise-1', title: 'Test Track', description: null, exerciseTitle: 'Test Exercise', level: 'A1', wordsPerMinute: 120, duration: '00:00:04',
   audioUrl: 'https://example.test/audio.mp3',
   sentences: [
-    { id: 's1', index: 1, text: 'Hello there.', startTime: '00:00:00', endTime: '00:00:02' },
-    { id: 's2', index: 2, text: 'Good morning.', startTime: '00:00:02', endTime: '00:00:04' }
+    { id: 's1', index: 1, text: 'Hello there.', startTime: '00:00:00', endTime: '00:00:02', isFavorited: false },
+    { id: 's2', index: 2, text: 'Good morning.', startTime: '00:00:02', endTime: '00:00:04', isFavorited: false }
   ],
-  nextTrackId: null
+  nextTrackId: null,
+  isFavorited: false
 }
 
 function mockFetchSequence(responses: Response[]) {
@@ -140,7 +141,7 @@ describe('SentencePracticeView', () => {
     })))
   })
 
-  it('Try Again is always visible and clears the result once one exists', async () => {
+  it('Reset is always visible and clears the result, the typed answer, and replays the audio', async () => {
     mockFetchSequence([
       new Response(new Blob(['audio-bytes']), { status: 200 }),
       new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 }),
@@ -150,21 +151,23 @@ describe('SentencePracticeView', () => {
     render(<SentencePracticeView track={track} onCompleted={vi.fn()} />)
     await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
 
-    expect(screen.getByRole('button', { name: /^try again$/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^reset$/i })).toBeInTheDocument()
 
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Wrong answer' } })
     fireEvent.click(screen.getByRole('button', { name: /^check$/i }))
     await screen.findByText('Hello')
 
-    const tryAgain = screen.getByRole('button', { name: /^try again$/i })
-    expect(tryAgain).toBeInTheDocument()
-    // Check and Skip remain available at the bottom alongside Try Again.
+    const resetButton = screen.getByRole('button', { name: /^reset$/i })
+    expect(resetButton).toBeInTheDocument()
+    // Check and Skip remain available at the bottom alongside Reset.
     expect(screen.getByRole('button', { name: /^check$/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /^skip$/i })).toBeInTheDocument()
 
-    fireEvent.click(tryAgain)
+    fireEvent.click(resetButton)
 
     await waitFor(() => expect(screen.queryByText('Hello')).not.toBeInTheDocument())
+    expect(screen.getByRole('textbox')).toHaveValue('')
+    expect(window.HTMLMediaElement.prototype.play).toHaveBeenCalled()
   })
 
   it('jumps to a clicked sentence in the list', async () => {
@@ -304,6 +307,7 @@ describe('SentencePracticeView', () => {
     await waitFor(() => expect(fetch).toHaveBeenLastCalledWith('/api/learner/practice-sessions/session-1/advance', expect.objectContaining({
       body: JSON.stringify({ toIndex: 0 })
     })))
+    await waitFor(() => expect(window.HTMLMediaElement.prototype.play).toHaveBeenCalled())
   })
 
   it('disables the previous-sentence button on the first sentence', async () => {
@@ -318,7 +322,7 @@ describe('SentencePracticeView', () => {
     expect(screen.getByRole('button', { name: /previous sentence/i })).toBeDisabled()
   })
 
-  it('the next-sentence button next to the play control advances like Skip', async () => {
+  it('the next-sentence button next to the play control navigates and autoplays the sentence', async () => {
     mockFetchSequence([
       new Response(new Blob(['audio-bytes']), { status: 200 }),
       new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 }),
@@ -333,6 +337,25 @@ describe('SentencePracticeView', () => {
     await waitFor(() => expect(fetch).toHaveBeenLastCalledWith('/api/learner/practice-sessions/session-1/advance', expect.objectContaining({
       body: JSON.stringify({ toIndex: 1 })
     })))
+    await waitFor(() => expect(window.HTMLMediaElement.prototype.play).toHaveBeenCalled())
+  })
+
+  it('Skip does not autoplay the next sentence', async () => {
+    mockFetchSequence([
+      new Response(new Blob(['audio-bytes']), { status: 200 }),
+      new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 }),
+      new Response(JSON.stringify({ currentSentenceIndex: 1, isCompleted: false, overallAccuracy: null }), { status: 200 })
+    ])
+
+    render(<SentencePracticeView track={track} onCompleted={vi.fn()} />)
+    await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
+
+    fireEvent.click(screen.getByRole('button', { name: /^skip$/i }))
+
+    await waitFor(() => expect(fetch).toHaveBeenLastCalledWith('/api/learner/practice-sessions/session-1/advance', expect.objectContaining({
+      body: JSON.stringify({ toIndex: 1 })
+    })))
+    expect(window.HTMLMediaElement.prototype.play).not.toHaveBeenCalled()
   })
 
   it('the answer field is a multi-line textarea with 3 default rows', async () => {
@@ -431,7 +454,7 @@ describe('SentencePracticeView', () => {
     vi.unstubAllGlobals()
   })
 
-  it('positions Try Again to the left of the mic button after a wrong submission', async () => {
+  it('positions Reset to the left of the mic button after a wrong submission', async () => {
     class FakeSpeechRecognition {
       continuous = false
       interimResults = false
@@ -457,9 +480,9 @@ describe('SentencePracticeView', () => {
     fireEvent.click(screen.getByRole('button', { name: /^check$/i }))
     await screen.findByText('Hello')
 
-    const tryAgain = screen.getByRole('button', { name: /^try again$/i })
+    const resetButton = screen.getByRole('button', { name: /^reset$/i })
     const mic = screen.getByRole('button', { name: /use microphone/i })
-    expect(tryAgain.compareDocumentPosition(mic) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(resetButton.compareDocumentPosition(mic) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
 
     vi.unstubAllGlobals()
   })
@@ -558,7 +581,7 @@ describe('SentencePracticeView', () => {
       expect(window.HTMLMediaElement.prototype.play).toHaveBeenCalled()
     })
 
-    it('holding Ctrl and pressing an arrow navigates sentences without triggering play/pause', async () => {
+    it('holding Ctrl and pressing > navigates to the next sentence and autoplays it', async () => {
       mockFetchSequence([
         new Response(new Blob(['audio-bytes']), { status: 200 }),
         new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 }),
@@ -569,17 +592,18 @@ describe('SentencePracticeView', () => {
       await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
 
       fireEvent.keyDown(window, { key: 'Control', ctrlKey: true })
-      fireEvent.keyDown(window, { key: 'ArrowRight', ctrlKey: true })
-      fireEvent.keyUp(window, { key: 'ArrowRight' })
+      fireEvent.keyDown(window, { key: '>', ctrlKey: true })
+      fireEvent.keyUp(window, { key: '>' })
       fireEvent.keyUp(window, { key: 'Control' })
 
       await waitFor(() => expect(fetch).toHaveBeenLastCalledWith('/api/learner/practice-sessions/session-1/advance', expect.objectContaining({
         body: JSON.stringify({ toIndex: 1 })
       })))
-      expect(window.HTMLMediaElement.prototype.play).not.toHaveBeenCalled()
+      // The solo-Ctrl-tap replay handler must not ALSO fire on top of the combo's own autoplay.
+      await waitFor(() => expect(window.HTMLMediaElement.prototype.play).toHaveBeenCalledTimes(1))
     })
 
-    it('Ctrl+ArrowLeft moves to the previous sentence', async () => {
+    it('Ctrl+< moves to the previous sentence', async () => {
       mockFetchSequence([
         new Response(new Blob(['audio-bytes']), { status: 200 }),
         new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 1, status: 'InProgress', completedAt: null }), { status: 200 }),
@@ -590,14 +614,14 @@ describe('SentencePracticeView', () => {
       await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
 
       fireEvent.keyDown(window, { key: 'Control', ctrlKey: true })
-      fireEvent.keyDown(window, { key: 'ArrowLeft', ctrlKey: true })
+      fireEvent.keyDown(window, { key: '<', ctrlKey: true })
 
       await waitFor(() => expect(fetch).toHaveBeenLastCalledWith('/api/learner/practice-sessions/session-1/advance', expect.objectContaining({
         body: JSON.stringify({ toIndex: 0 })
       })))
     })
 
-    it('Ctrl+ArrowUp clears the result, same as clicking Try Again', async () => {
+    it('Ctrl+/ clears the result and typed answer and replays the audio, same as clicking Reset', async () => {
       mockFetchSequence([
         new Response(new Blob(['audio-bytes']), { status: 200 }),
         new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 })
@@ -611,9 +635,11 @@ describe('SentencePracticeView', () => {
       await screen.findByText('Hello')
 
       fireEvent.keyDown(window, { key: 'Control', ctrlKey: true })
-      fireEvent.keyDown(window, { key: 'ArrowUp', ctrlKey: true })
+      fireEvent.keyDown(window, { key: '/', ctrlKey: true })
 
       await waitFor(() => expect(screen.queryByText('Hello')).not.toBeInTheDocument())
+      expect(screen.getByRole('textbox')).toHaveValue('')
+      expect(window.HTMLMediaElement.prototype.play).toHaveBeenCalled()
     })
 
     it('Ctrl+Enter triggers Skip', async () => {
@@ -664,5 +690,23 @@ describe('SentencePracticeView', () => {
 
       vi.unstubAllGlobals()
     })
+  })
+
+  it('toggles the current sentence favorite and calls the favorite endpoint', async () => {
+    const fetchMock = mockFetchSequence([
+      new Response(new Blob(['audio-bytes']), { status: 200 }),
+      new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 }),
+      new Response(null, { status: 204 })
+    ])
+
+    render(<SentencePracticeView track={track} onCompleted={vi.fn()} />)
+    await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add sentence to favorites' }))
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenLastCalledWith('/api/learner/sentences/s1/favorite', { method: 'PUT' })
+    })
+    expect(await screen.findByRole('button', { name: 'Remove sentence from favorites' })).toBeInTheDocument()
   })
 })

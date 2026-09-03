@@ -3,11 +3,12 @@
 import { Suspense, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
+import { breadcrumbLinkStyle } from '@/lib/breadcrumbLinkStyle'
 import { SentencePracticeView } from './SentencePracticeView'
 import { FullTextView } from './FullTextView'
 import { CompletionPage } from './CompletionPage'
 
-export type LearnerSentence = { id: string; index: number; text: string; startTime: string; endTime: string }
+export type LearnerSentence = { id: string; index: number; text: string; startTime: string; endTime: string; isFavorited: boolean }
 export type LearnerTrack = {
   id: string
   unitId: string
@@ -21,6 +22,7 @@ export type LearnerTrack = {
   audioUrl: string
   sentences: LearnerSentence[]
   nextTrackId: string | null
+  isFavorited: boolean
 }
 
 export default function TrackPage() {
@@ -36,12 +38,16 @@ function TrackPageContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const initialMode = searchParams.get('mode') === 'full' ? 'full' : 'sentence'
+  const initialSentenceParam = searchParams.get('sentence')
+  const initialSentenceIndex = initialSentenceParam !== null ? Number(initialSentenceParam) : null
 
   const [track, setTrack] = useState<LearnerTrack | null>(null)
   const [mode, setMode] = useState<'sentence' | 'full'>(initialMode)
   const [error, setError] = useState<string | null>(null)
   const [completion, setCompletion] = useState<{ accuracyScore: number; mode: 'sentence' | 'full' } | null>(null)
   const [practiceKey, setPracticeKey] = useState(0)
+  const [isFavorited, setIsFavorited] = useState(false)
+  const [isTogglingFavorite, setIsTogglingFavorite] = useState(false)
 
   useEffect(() => {
     async function load() {
@@ -50,13 +56,24 @@ function TrackPageContent() {
         setError('Failed to load this track.')
         return
       }
-      setTrack(await response.json())
+      const loadedTrack: LearnerTrack = await response.json()
+      setTrack(loadedTrack)
+      setIsFavorited(loadedTrack.isFavorited)
     }
     load()
   }, [trackId])
 
   if (error) return <main style={{ padding: 40 }}>{error}</main>
   if (!track) return <main style={{ padding: 40, color: 'var(--ink-soft)', fontWeight: 700 }}>Loading...</main>
+
+  async function handleToggleFavorite() {
+    setIsTogglingFavorite(true)
+    const nextValue = !isFavorited
+    setIsFavorited(nextValue)
+    const response = await fetch(`/api/learner/tracks/${trackId}/favorite`, { method: nextValue ? 'PUT' : 'DELETE' })
+    setIsTogglingFavorite(false)
+    if (!response.ok) setIsFavorited(!nextValue)
+  }
 
   function handlePracticeAgain() {
     setCompletion(null)
@@ -96,11 +113,22 @@ function TrackPageContent() {
   return (
     <main style={{ padding: '20px 40px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18 }}>
       <div style={{ alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: 6, color: 'var(--ink-faint)', fontSize: 15, fontWeight: 700 }}>
-        <Link href="/" style={{ color: 'var(--ink)', textDecoration: 'underline' }}>Home</Link>
+        <Link href="/" style={breadcrumbLinkStyle}>Exercises</Link>
         <span>/</span>
-        <Link href={`/exercises/${track.exerciseId}`} style={{ color: 'var(--ink)', textDecoration: 'underline' }}>{track.exerciseTitle}</Link>
+        <Link href={`/exercises/${track.exerciseId}`} style={breadcrumbLinkStyle}>{track.exerciseTitle}</Link>
         <span>/</span>
         <span style={{ color: 'var(--ink-soft)' }}>{track.title}</span>
+        <button
+          onClick={handleToggleFavorite}
+          disabled={isTogglingFavorite}
+          aria-label={isFavorited ? 'Remove from favorites' : 'Add to favorites'}
+          aria-pressed={isFavorited}
+          style={{ background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill={isFavorited ? 'var(--primary)' : 'none'} stroke={isFavorited ? 'var(--primary)' : 'var(--ink-faint)'} strokeWidth="2">
+            <path d="M12 21s-6.7-4.35-9.3-8.28C1.02 10.4 1.5 6.9 4.3 5.3a5 5 0 0 1 7 1.2 5 5 0 0 1 7-1.2c2.8 1.6 3.28 5.1 1.6 7.42C18.7 16.65 12 21 12 21z" strokeLinejoin="round" />
+          </svg>
+        </button>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
@@ -157,6 +185,7 @@ function TrackPageContent() {
         <FullTextView
           key={practiceKey}
           track={track}
+          initialSentenceIndex={initialSentenceIndex}
           onRecitationCompleted={(accuracyScore) => setCompletion({ accuracyScore, mode: 'full' })}
         />
       )}

@@ -9,7 +9,7 @@ describe('CompletionPage', () => {
     ))
   })
 
-  it('shows the accuracy score and a random encouragement quote', async () => {
+  it('shows the accuracy score and a random quote', async () => {
     render(<CompletionPage accuracyScore={0.85} hasNextTrack={true} onPracticeAgain={vi.fn()} onNextTrack={vi.fn()} />)
 
     expect(screen.getByText(/85/)).toBeInTheDocument()

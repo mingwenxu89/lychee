@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
+import { breadcrumbLinkStyle } from '@/lib/breadcrumbLinkStyle'
 
 type Track = {
   id: string
@@ -15,7 +16,7 @@ type Track = {
   isCompletedByUser: boolean
 }
 type Unit = { id: string; title: string; order: number; tracks: Track[] }
-type ExerciseDetail = { id: string; title: string; description: string | null; category: string; units: Unit[] }
+type ExerciseDetail = { id: string; title: string; description: string | null; units: Unit[] }
 
 const cardStyle: React.CSSProperties = {
   background: 'var(--surface)',
@@ -78,7 +79,7 @@ export default function ExerciseDetailPage() {
   return (
     <main style={{ padding: '20px 40px', display: 'flex', flexDirection: 'column', gap: 24 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 15, fontWeight: 700 }}>
-        <Link href="/" style={{ color: 'oklch(55% 0.2 250)', textDecoration: 'none' }}>Home</Link>
+        <Link href="/" style={breadcrumbLinkStyle}>Exercises</Link>
         <span style={{ color: 'var(--ink-faint)' }}>/</span>
         <span style={{ color: 'var(--ink-soft)' }}>{detail.title}</span>
       </div>

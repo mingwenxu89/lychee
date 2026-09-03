@@ -4,9 +4,9 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 import HistoryPage from './page'
 
 const entries = [
-  { trackId: 'track-1', trackTitle: 'The First Snowfall', exerciseCategory: 'Short Stories', practiceType: 'Practice', status: 'InProgress', accuracy: null, currentSentenceIndex: 4, totalSentences: 21, timestamp: new Date().toISOString() },
-  { trackId: 'track-2', trackTitle: 'At the Coffee Shop', exerciseCategory: 'Conversations', practiceType: 'Practice', status: 'Completed', accuracy: 0.92, currentSentenceIndex: null, totalSentences: null, timestamp: new Date().toISOString() },
-  { trackId: 'track-3', trackTitle: 'The Power of Learning', exerciseCategory: 'VOA Slow English', practiceType: 'Recitation', status: 'Completed', accuracy: 0.86, currentSentenceIndex: null, totalSentences: null, timestamp: new Date().toISOString() }
+  { trackId: 'track-1', trackTitle: 'The First Snowfall', exerciseTitle: 'Short Stories', practiceType: 'Practice', status: 'InProgress', accuracy: null, currentSentenceIndex: 4, totalSentences: 21, timestamp: new Date().toISOString() },
+  { trackId: 'track-2', trackTitle: 'At the Coffee Shop', exerciseTitle: 'Conversations', practiceType: 'Practice', status: 'Completed', accuracy: 0.92, currentSentenceIndex: null, totalSentences: null, timestamp: new Date().toISOString() },
+  { trackId: 'track-3', trackTitle: 'The Power of Learning', exerciseTitle: 'VOA Slow English', practiceType: 'Recitation', status: 'Completed', accuracy: 0.86, currentSentenceIndex: null, totalSentences: null, timestamp: new Date().toISOString() }
 ]
 
 beforeEach(() => {

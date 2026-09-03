@@ -28,7 +28,7 @@ public class PublishStatusTests : IClassFixture<LycheeWebApplicationFactory>
         var client = AdminClient();
         var suffix = Guid.NewGuid().ToString("N")[..8];
         var createResponse = await client.PostAsJsonAsync("/api/admin/exercises",
-            new { title = $"Exercise {suffix}", description = (string?)null, coverImageUrl = (string?)null, category = "Short Stories" });
+            new { title = $"Exercise {suffix}", description = (string?)null, coverImageUrl = (string?)null });
         var exercise = await createResponse.Content.ReadFromJsonAsync<ExerciseResponse>();
         Assert.True(exercise!.IsPublished);
 
@@ -44,5 +44,5 @@ public class PublishStatusTests : IClassFixture<LycheeWebApplicationFactory>
         Assert.False(reloaded!.IsPublished);
     }
 
-    private record ExerciseResponse(Guid Id, string Title, string? Description, string? CoverImageUrl, string Category, bool IsPublished);
+    private record ExerciseResponse(Guid Id, string Title, string? Description, string? CoverImageUrl, bool IsPublished);
 }

@@ -6,7 +6,6 @@ import Link from 'next/link'
 type Exercise = {
   id: string
   title: string
-  category: string
   difficultyRangeLabel: string | null
   trackCount: number
   completedTrackCount: number
@@ -16,18 +15,17 @@ type Exercise = {
 const cardStyle: React.CSSProperties = {
   background: 'var(--surface)',
   borderRadius: 24,
-  boxShadow: '0 10px 0 var(--line), 0 14px 28px oklch(22% 0.03 270 / 0.07)'
+  boxShadow: 'none'
 }
 
-const CATEGORY_COLORS: { bg: string; fg: string }[] = [
+const ACCENT_COLORS: { bg: string; fg: string }[] = [
   { bg: 'var(--primary-soft)', fg: 'var(--primary)' },
   { bg: 'var(--violet-soft)', fg: 'var(--violet)' },
   { bg: 'var(--gold-soft)', fg: 'oklch(60% 0.13 75)' }
 ]
 
-function colorForCategory(category: string, allCategories: string[]): { bg: string; fg: string } {
-  const index = allCategories.indexOf(category)
-  return CATEGORY_COLORS[index % CATEGORY_COLORS.length]
+function accentForIndex(index: number): { bg: string; fg: string } {
+  return ACCENT_COLORS[index % ACCENT_COLORS.length]
 }
 
 function ExerciseCard({ exercise, accent }: { exercise: Exercise; accent: { bg: string; fg: string } }) {
@@ -63,7 +61,7 @@ export default function ExercisesPage() {
   const [exercises, setExercises] = useState<Exercise[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
-  const [activeCategory, setActiveCategory] = useState('All')
+  const [isAdmin, setIsAdmin] = useState(false)
 
   useEffect(() => {
     async function load() {
@@ -77,19 +75,28 @@ export default function ExercisesPage() {
     load()
   }, [])
 
-  const categories = useMemo(() => {
-    if (!exercises) return []
-    return Array.from(new Set(exercises.map((e) => e.category)))
-  }, [exercises])
+  useEffect(() => {
+    async function loadMe() {
+      const response = await fetch('/api/auth/me')
+      if (!response.ok) return
+      const me: { roles?: string[] } = await response.json()
+      setIsAdmin(Array.isArray(me.roles) && me.roles.includes('Admin'))
+    }
+    loadMe()
+  }, [])
 
   const filtered = useMemo(() => {
     if (!exercises) return []
-    return exercises.filter((e) => {
-      const matchesCategory = activeCategory === 'All' || e.category === activeCategory
-      const matchesSearch = e.title.toLowerCase().includes(search.toLowerCase())
-      return matchesCategory && matchesSearch
-    })
-  }, [exercises, activeCategory, search])
+    return exercises.filter((e) => e.title.toLowerCase().includes(search.toLowerCase()))
+  }, [exercises, search])
+
+  const recentExercises = useMemo(() => {
+    if (!exercises) return []
+    return exercises
+      .filter((e): e is Exercise & { lastPracticedAt: string } => e.lastPracticedAt !== null)
+      .sort((a, b) => new Date(b.lastPracticedAt).getTime() - new Date(a.lastPracticedAt).getTime())
+      .slice(0, 5)
+  }, [exercises])
 
   if (error) return <main style={{ padding: 40 }}>{error}</main>
   if (!exercises) return <main style={{ padding: 40, color: 'var(--ink-soft)', fontWeight: 700 }}>Loading...</main>
@@ -98,48 +105,70 @@ export default function ExercisesPage() {
     <main style={{ padding: '20px 40px', display: 'flex', flexDirection: 'column', gap: 26 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <h1 style={{ margin: 0, fontSize: 30, fontWeight: 700 }}>All Exercises</h1>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--surface)', border: '2px solid var(--line)', borderRadius: 999, padding: '10px 18px', width: 260 }}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--ink-faint)" strokeWidth="2"><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search exercises..."
-            style={{ border: 'none', outline: 'none', background: 'transparent', fontWeight: 600, fontSize: 14, width: '100%' }}
-          />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          {isAdmin && (
+            <Link
+              href="/admin/exercises"
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none',
+                background: 'transparent', border: '2px solid var(--line)', color: 'var(--ink-soft)',
+                fontWeight: 800, fontSize: 14, borderRadius: 999, padding: '10px 18px', whiteSpace: 'nowrap'
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--ink-soft)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+              </svg>
+              Admin
+            </Link>
+          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--surface)', border: '2px solid var(--line)', borderRadius: 999, padding: '10px 18px', width: 260 }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--ink-faint)" strokeWidth="2"><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search exercises..."
+              style={{ border: 'none', outline: 'none', background: 'transparent', fontWeight: 600, fontSize: 14, width: '100%' }}
+            />
+          </div>
         </div>
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-        <button
-          onClick={() => setActiveCategory('All')}
+        <span
           style={{
-            borderRadius: 999, padding: '10px 20px', fontWeight: 800, fontSize: 14, cursor: 'pointer', border: 'none',
-            background: activeCategory === 'All' ? 'var(--primary)' : 'var(--surface)',
-            color: activeCategory === 'All' ? 'white' : 'var(--ink-soft)',
-            ...(activeCategory !== 'All' ? { border: '2px solid var(--line)' } : {})
+            borderRadius: 999, padding: '10px 20px', fontWeight: 800, fontSize: 14,
+            background: 'var(--primary)', color: 'white'
           }}
         >
           All
-        </button>
-        {categories.map((category) => (
-          <button
-            key={category}
-            onClick={() => setActiveCategory(category)}
-            style={{
-              borderRadius: 999, padding: '10px 20px', fontWeight: 800, fontSize: 14, cursor: 'pointer', border: 'none',
-              background: activeCategory === category ? 'var(--primary)' : 'var(--surface)',
-              color: activeCategory === category ? 'white' : 'var(--ink-soft)',
-              ...(activeCategory !== category ? { border: '2px solid var(--line)' } : {})
-            }}
-          >
-            {category}
-          </button>
-        ))}
+        </span>
+        {recentExercises.length > 0 && (
+          <>
+            <span style={{ color: 'var(--line)', fontSize: 14 }}>|</span>
+            <span data-testid="recent-exercises" style={{ display: 'contents' }}>
+            {recentExercises.map((exercise) => (
+              <Link
+                key={exercise.id}
+                href={`/exercises/${exercise.id}`}
+                title={exercise.title}
+                style={{
+                  borderRadius: 999, padding: '10px 20px', fontWeight: 800, fontSize: 14,
+                  background: 'var(--surface)', color: 'var(--ink-soft)', border: '2px solid var(--line)',
+                  textDecoration: 'none', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
+                }}
+              >
+                {exercise.title}
+              </Link>
+            ))}
+            </span>
+          </>
+        )}
       </div>
 
       <div data-testid="exercise-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 24 }}>
-        {filtered.map((exercise) => (
-          <ExerciseCard key={exercise.id} exercise={exercise} accent={colorForCategory(exercise.category, categories)} />
+        {filtered.map((exercise, index) => (
+          <ExerciseCard key={exercise.id} exercise={exercise} accent={accentForIndex(index)} />
         ))}
       </div>
     </main>

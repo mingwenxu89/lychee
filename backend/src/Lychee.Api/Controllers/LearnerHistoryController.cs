@@ -9,7 +9,7 @@ using Microsoft.EntityFrameworkCore;
 namespace Lychee.Api.Controllers;
 
 public record HistoryEntryResponse(
-    Guid TrackId, string TrackTitle, string ExerciseCategory, string PracticeType,
+    Guid TrackId, string TrackTitle, string ExerciseTitle, string PracticeType,
     string Status, double? Accuracy, int? CurrentSentenceIndex, int? TotalSentences,
     DateTime Timestamp);
 
@@ -58,7 +58,7 @@ public class LearnerHistoryController : ControllerBase
             }
 
             entries.Add(new HistoryEntryResponse(
-                session.TrackId, session.Track.Title, session.Track.Unit.Exercise.Category, "Practice",
+                session.TrackId, session.Track.Title, session.Track.Unit.Exercise.Title, "Practice",
                 session.Status.ToString(), accuracy,
                 session.Status == PracticeSessionStatus.Completed ? null : session.CurrentSentenceIndex,
                 session.Status == PracticeSessionStatus.Completed ? null : session.Track.Sentences.Count,
@@ -68,7 +68,7 @@ public class LearnerHistoryController : ControllerBase
         foreach (var attempt in attempts)
         {
             entries.Add(new HistoryEntryResponse(
-                attempt.TrackId, attempt.Track.Title, attempt.Track.Unit.Exercise.Category, "Recitation",
+                attempt.TrackId, attempt.Track.Title, attempt.Track.Unit.Exercise.Title, "Recitation",
                 "Completed", attempt.Score, null, null, attempt.CreatedAt));
         }
 

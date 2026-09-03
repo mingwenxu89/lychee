@@ -16,7 +16,10 @@ public class StorageServiceCollectionExtensionsTests
                 ["Storage:Provider"] = provider,
                 ["Storage:LocalRootPath"] = "local-blobs",
                 ["Storage:LocalBaseUrl"] = "http://localhost:5000/local-blobs",
-                ["Storage:AzureConnectionString"] = "UseDevelopmentStorage=true"
+                ["Storage:AzureConnectionString"] = "UseDevelopmentStorage=true",
+                ["Storage:R2AccountId"] = "test-account",
+                ["Storage:R2AccessKeyId"] = "test-key",
+                ["Storage:R2SecretAccessKey"] = "test-secret"
             })
             .Build();
 
@@ -37,5 +40,12 @@ public class StorageServiceCollectionExtensionsTests
     {
         var provider = BuildProvider("Azure");
         Assert.IsType<AzureBlobStorageService>(provider.GetRequiredService<IBlobStorageService>());
+    }
+
+    [Fact]
+    public void Provider_R2_ResolvesR2BlobStorageService()
+    {
+        var provider = BuildProvider("R2");
+        Assert.IsType<R2BlobStorageService>(provider.GetRequiredService<IBlobStorageService>());
     }
 }

@@ -8,7 +8,7 @@ vi.mock('next/navigation', () => ({
 import ExerciseDetailPage from './page'
 
 const detail = {
-  id: 'ex-1', title: 'Short Stories', description: 'Cozy short stories', category: 'Short Stories',
+  id: 'ex-1', title: 'Short Stories', description: 'Cozy short stories',
   units: [
     {
       id: 'unit-1', title: 'Unit 1', order: 1,
@@ -31,10 +31,10 @@ beforeEach(() => {
 })
 
 describe('ExerciseDetailPage', () => {
-  it('shows a breadcrumb with Home linking back and the Exercise title as the current page', async () => {
+  it('shows a breadcrumb with Exercises linking back and the Exercise title as the current page', async () => {
     render(<ExerciseDetailPage />)
 
-    expect(await screen.findByText('Home')).toHaveAttribute('href', '/')
+    expect(await screen.findByText('Exercises')).toHaveAttribute('href', '/')
     expect(screen.getByText('Short Stories')).toBeInTheDocument()
     expect(screen.getByText('Short Stories').closest('a')).toBeNull()
   })

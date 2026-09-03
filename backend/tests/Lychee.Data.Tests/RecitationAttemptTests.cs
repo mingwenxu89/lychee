@@ -32,7 +32,6 @@ public class RecitationAttemptTests
         {
             Id = Guid.NewGuid(),
             Title = "Test Exercise",
-            Category = "Short Stories",
             Units =
             {
                 new Unit

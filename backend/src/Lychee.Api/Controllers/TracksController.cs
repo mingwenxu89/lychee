@@ -113,7 +113,15 @@ public class TracksController : ControllerBase
         await _db.SaveChangesAsync();
 
         var response = await ToResponseAsync(track, track.Sentences.Count);
-        return CreatedAtAction(nameof(ListForUnit), new { unitId }, response);
+        return CreatedAtAction(nameof(Get), new { id = track.Id }, response);
+    }
+
+    [HttpGet("api/admin/tracks/{id}")]
+    public async Task<IActionResult> Get(Guid id)
+    {
+        var track = await _db.Tracks.Include(t => t.Sentences).FirstOrDefaultAsync(t => t.Id == id);
+        if (track is null) return NotFound();
+        return Ok(await ToResponseAsync(track, track.Sentences.Count));
     }
 
     [HttpPut("api/admin/tracks/{id}")]

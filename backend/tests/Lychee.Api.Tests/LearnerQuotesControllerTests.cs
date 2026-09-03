@@ -7,11 +7,11 @@ using Xunit;
 
 namespace Lychee.Api.Tests;
 
-public class LearnerEncouragementQuotesControllerTests : IClassFixture<LycheeWebApplicationFactory>
+public class LearnerQuotesControllerTests : IClassFixture<LycheeWebApplicationFactory>
 {
     private readonly LycheeWebApplicationFactory _factory;
 
-    public LearnerEncouragementQuotesControllerTests(LycheeWebApplicationFactory factory) => _factory = factory;
+    public LearnerQuotesControllerTests(LycheeWebApplicationFactory factory) => _factory = factory;
 
     private record IdOnly(Guid Id);
     private record RandomQuoteResponse(string Text);
@@ -42,7 +42,7 @@ public class LearnerEncouragementQuotesControllerTests : IClassFixture<LycheeWeb
         var learner = LearnerClient();
 
         // Record pre-existing active quotes
-        var preexistingResponse = await admin.GetAsync("/api/admin/encouragement-quotes");
+        var preexistingResponse = await admin.GetAsync("/api/admin/quotes");
         var preexistingQuotes = await preexistingResponse.Content.ReadFromJsonAsync<List<QuoteResponse>>();
         var preexistingActiveTexts = (preexistingQuotes ?? [])
             .Where(q => q.IsActive)
@@ -52,14 +52,14 @@ public class LearnerEncouragementQuotesControllerTests : IClassFixture<LycheeWeb
         // Create one new active quote
         var suffix = Guid.NewGuid().ToString("N")[..8];
         var newActiveText = $"Great job {suffix}!";
-        var activeResponse = await admin.PostAsJsonAsync("/api/admin/encouragement-quotes", new { text = newActiveText });
+        var activeResponse = await admin.PostAsJsonAsync("/api/admin/quotes", new { text = newActiveText });
         var active = await activeResponse.Content.ReadFromJsonAsync<IdOnly>();
 
         // Create one new inactive quote
         var newInactiveText = $"Never shown {suffix}!";
-        var inactiveResponse = await admin.PostAsJsonAsync("/api/admin/encouragement-quotes", new { text = newInactiveText });
+        var inactiveResponse = await admin.PostAsJsonAsync("/api/admin/quotes", new { text = newInactiveText });
         var inactive = await inactiveResponse.Content.ReadFromJsonAsync<IdOnly>();
-        await admin.PutAsJsonAsync($"/api/admin/encouragement-quotes/{inactive!.Id}", new { text = newInactiveText, isActive = false });
+        await admin.PutAsJsonAsync($"/api/admin/quotes/{inactive!.Id}", new { text = newInactiveText, isActive = false });
 
         // Build the set of expected active texts: pre-existing active + new active
         var expectedActiveTexts = new HashSet<string>(preexistingActiveTexts) { newActiveText };
@@ -67,7 +67,7 @@ public class LearnerEncouragementQuotesControllerTests : IClassFixture<LycheeWeb
         // Call the learner endpoint 10 times and verify only active quotes are returned
         for (var i = 0; i < 10; i++)
         {
-            var response = await learner.GetAsync("/api/learner/encouragement-quotes/random");
+            var response = await learner.GetAsync("/api/learner/quotes/random");
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             var quote = await response.Content.ReadFromJsonAsync<RandomQuoteResponse>();
 

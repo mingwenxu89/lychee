@@ -13,6 +13,10 @@ public static class StorageServiceCollectionExtensions
         {
             services.AddSingleton<IBlobStorageService, AzureBlobStorageService>();
         }
+        else if (string.Equals(provider, "R2", StringComparison.OrdinalIgnoreCase))
+        {
+            services.AddSingleton<IBlobStorageService, R2BlobStorageService>();
+        }
         else
         {
             services.AddSingleton<IBlobStorageService, LocalFileBlobStorageService>();

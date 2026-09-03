@@ -47,7 +47,7 @@ describe('NavBar', () => {
     vi.mocked(usePathname).mockReturnValue('/')
     render(<NavBar rankLabel="Seedling" activityDays={0} userInitial="M" />)
     expect(screen.getByText('Exercises').closest('a')).toHaveAttribute('href', '/')
-    expect(screen.getByText('Favorites').closest('a')).toBeNull() // not yet built, so not a real link
+    expect(screen.getByText('Favorites').closest('a')).toHaveAttribute('href', '/favorites')
     expect(screen.getByText('History').closest('a')).toHaveAttribute('href', '/history')
   })
 

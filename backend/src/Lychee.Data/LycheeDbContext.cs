@@ -19,7 +19,7 @@ public class LycheeDbContext : IdentityDbContext<ApplicationUser, IdentityRole<G
     public DbSet<PracticeRecord> PracticeRecords => Set<PracticeRecord>();
     public DbSet<RecitationAttempt> RecitationAttempts => Set<RecitationAttempt>();
     public DbSet<DailyPracticeLog> DailyPracticeLogs => Set<DailyPracticeLog>();
-    public DbSet<EncouragementQuote> EncouragementQuotes => Set<EncouragementQuote>();
+    public DbSet<Quote> Quotes => Set<Quote>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

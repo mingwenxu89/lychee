@@ -1,6 +1,6 @@
 namespace Lychee.Data.Entities;
 
-public class EncouragementQuote
+public class Quote
 {
     public Guid Id { get; set; }
     public string Text { get; set; } = null!;

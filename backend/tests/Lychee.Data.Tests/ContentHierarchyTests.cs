@@ -30,7 +30,6 @@ public class ContentHierarchyTests
         {
             Id = Guid.NewGuid(),
             Title = $"Short Stories {suffix}",
-            Category = "Short Stories",
             Units =
             {
                 new Unit

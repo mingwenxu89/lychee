@@ -32,7 +32,6 @@ public class DailyPracticeLogConstraintTests
         {
             Id = Guid.NewGuid(),
             Title = "Test Exercise",
-            Category = "Short Stories",
             Units =
             {
                 new Unit

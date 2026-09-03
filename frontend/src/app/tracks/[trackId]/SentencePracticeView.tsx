@@ -26,7 +26,7 @@ const btnPrimary: React.CSSProperties = {
   border: 'none',
   borderRadius: 999,
   padding: '14px 30px',
-  boxShadow: '0 5px 0 var(--primary-dark)',
+  boxShadow: 'none',
   cursor: 'pointer'
 }
 
@@ -78,7 +78,7 @@ const modalStyle: React.CSSProperties = {
   maxWidth: '92vw',
   background: 'var(--surface)',
   borderRadius: 28,
-  boxShadow: '0 14px 0 var(--line), 0 22px 44px oklch(22% 0.03 270 / 0.22)',
+  boxShadow: 'none',
   padding: '32px 36px',
   display: 'flex',
   flexDirection: 'column',
@@ -100,9 +100,9 @@ const keyBadgeStyle: React.CSSProperties = {
 const SHORTCUTS: { keys: string; description: string }[] = [
   { keys: 'Enter', description: 'Check / Next' },
   { keys: 'Ctrl', description: 'Replay this sentence' },
-  { keys: 'Ctrl + ←', description: 'Previous sentence' },
-  { keys: 'Ctrl + →', description: 'Next sentence' },
-  { keys: 'Ctrl + ↑', description: 'Try again' },
+  { keys: 'Ctrl + <', description: 'Previous sentence' },
+  { keys: 'Ctrl + >', description: 'Next sentence' },
+  { keys: 'Ctrl + /', description: 'Reset' },
   { keys: 'Ctrl + Enter', description: 'Skip' },
   { keys: 'Ctrl + M', description: 'Toggle microphone' }
 ]
@@ -132,11 +132,15 @@ export function SentencePracticeView({
   const [isRecording, setIsRecording] = useState(false)
   const [completedIndices, setCompletedIndices] = useState<Set<number>>(new Set())
   const [showShortcuts, setShowShortcuts] = useState(false)
+  const [favoritedSentenceIds, setFavoritedSentenceIds] = useState(
+    () => new Set(track.sentences.filter((s) => s.isFavorited).map((s) => s.id))
+  )
   const audioRef = useRef<HTMLAudioElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const recognizerRef = useRef<{ start: () => void; stop: () => void } | null>(null)
   const baseAnswerRef = useRef('')
   const ctrlComboFiredRef = useRef(false)
+  const autoplayOnChangeRef = useRef(false)
 
   useEffect(() => {
     async function init() {
@@ -173,6 +177,11 @@ export function SentencePracticeView({
     const audio = audioRef.current
     audio.currentTime = sentenceStart
     setElapsedInSentence(0)
+
+    if (autoplayOnChangeRef.current) {
+      autoplayOnChangeRef.current = false
+      audio.play()
+    }
 
     function onTimeUpdate() {
       if (audio.currentTime >= sentenceEnd) {
@@ -229,6 +238,12 @@ export function SentencePracticeView({
     audio.play()
   }
 
+  function handleTryAgain() {
+    setAnswer('')
+    setResult(null)
+    handleReplayClick()
+  }
+
   function handleSubmit() {
     if (!session || !currentSentence) return
     setActionError(null)
@@ -267,10 +282,16 @@ export function SentencePracticeView({
     setAnswer('')
     setResult(null)
     if (advanced.isCompleted) {
+      autoplayOnChangeRef.current = false
       onCompleted(advanced.overallAccuracy ?? 0)
     } else {
       setSession({ ...session, currentSentenceIndex: advanced.currentSentenceIndex })
     }
+  }
+
+  function handleAdvanceAndPlay(toIndex: number) {
+    autoplayOnChangeRef.current = true
+    handleAdvance(toIndex)
   }
 
   function handleSkip() {
@@ -279,6 +300,27 @@ export function SentencePracticeView({
     // Progress — unlike Previous/Next (pure navigation) or jumping via the Progress list.
     setCompletedIndices((prev) => new Set(prev).add(session.currentSentenceIndex))
     handleAdvance(session.currentSentenceIndex + 1)
+  }
+
+  async function handleToggleSentenceFavorite() {
+    if (!currentSentence) return
+    const sentenceId = currentSentence.id
+    const isFavorited = favoritedSentenceIds.has(sentenceId)
+    setFavoritedSentenceIds((prev) => {
+      const next = new Set(prev)
+      if (isFavorited) next.delete(sentenceId)
+      else next.add(sentenceId)
+      return next
+    })
+    const response = await fetch(`/api/learner/sentences/${sentenceId}/favorite`, { method: isFavorited ? 'DELETE' : 'PUT' })
+    if (!response.ok) {
+      setFavoritedSentenceIds((prev) => {
+        const next = new Set(prev)
+        if (isFavorited) next.add(sentenceId)
+        else next.delete(sentenceId)
+        return next
+      })
+    }
   }
 
   function handleMicClick() {
@@ -305,9 +347,9 @@ export function SentencePracticeView({
   // Keyboard shortcuts: plain Enter mirrors Check/Next; a tap of Ctrl alone (pressed and
   // released with nothing else in between) rewinds to the sentence's start and replays it
   // (Play/Pause itself stays mouse-only, unlike Full Listen's Space shortcut); Ctrl held as a
-  // modifier for Left/Right/Up/Enter/M mirrors Previous/Next/Try Again/Skip/Mic. The
-  // tap-vs-modifier distinction is tracked via ctrlComboFiredRef, since holding Ctrl to reach
-  // any of those combos also fires a bare Control keydown first.
+  // modifier for < / > / Enter / M mirrors Previous/Next/Reset/Skip/Mic. The tap-vs-modifier
+  // distinction is tracked via ctrlComboFiredRef, since holding Ctrl to reach any of those
+  // combos also fires a bare Control keydown first.
   useEffect(() => {
     if (!isReady || showShortcuts) return
 
@@ -318,18 +360,24 @@ export function SentencePracticeView({
       }
 
       if (e.ctrlKey) {
-        if (e.key === 'ArrowLeft') {
+        // Bind to the physical comma/period keys regardless of whether Shift is actually held —
+        // browsers are inconsistent about resolving e.key to '<'/'>' under the three-key
+        // Ctrl+Shift+, combo, and a learner reaching for "Ctrl + <" is just as likely to press
+        // Ctrl+, without shift as the shifted symbol itself.
+        const isPrevCombo = e.code === 'Comma' || e.key === ',' || e.key === '<'
+        const isNextCombo = e.code === 'Period' || e.key === '.' || e.key === '>'
+        if (isPrevCombo) {
           e.preventDefault()
           ctrlComboFiredRef.current = true
-          if (session) handleAdvance(session.currentSentenceIndex - 1)
-        } else if (e.key === 'ArrowRight') {
+          if (session) handleAdvanceAndPlay(session.currentSentenceIndex - 1)
+        } else if (isNextCombo) {
           e.preventDefault()
           ctrlComboFiredRef.current = true
-          if (session) handleAdvance(session.currentSentenceIndex + 1)
-        } else if (e.key === 'ArrowUp') {
+          if (session) handleAdvanceAndPlay(session.currentSentenceIndex + 1)
+        } else if (e.key === '/') {
           e.preventDefault()
           ctrlComboFiredRef.current = true
-          setResult(null)
+          handleTryAgain()
         } else if (e.key === 'Enter') {
           e.preventDefault()
           ctrlComboFiredRef.current = true
@@ -383,6 +431,24 @@ export function SentencePracticeView({
             <span style={{ ...chipStyle, background: 'var(--primary-soft)', color: 'var(--ink-soft)' }}>
               Sentence {sentenceNumber} / {totalSentences}
             </span>
+            <button
+              onClick={handleToggleSentenceFavorite}
+              disabled={!currentSentence}
+              aria-label={currentSentence && favoritedSentenceIds.has(currentSentence.id) ? 'Remove sentence from favorites' : 'Add sentence to favorites'}
+              aria-pressed={currentSentence ? favoritedSentenceIds.has(currentSentence.id) : false}
+              style={{ background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', flexShrink: 0 }}
+            >
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill={currentSentence && favoritedSentenceIds.has(currentSentence.id) ? 'var(--primary)' : 'none'}
+                stroke={currentSentence && favoritedSentenceIds.has(currentSentence.id) ? 'var(--primary)' : 'var(--ink-faint)'}
+                strokeWidth="2"
+              >
+                <path d="M12 21s-6.7-4.35-9.3-8.28C1.02 10.4 1.5 6.9 4.3 5.3a5 5 0 0 1 7 1.2 5 5 0 0 1 7-1.2c2.8 1.6 3.28 5.1 1.6 7.42C18.7 16.65 12 21 12 21z" strokeLinejoin="round" />
+              </svg>
+            </button>
             <div style={{ flex: 1, height: 10, background: 'var(--line)', borderRadius: 999, overflow: 'hidden' }}>
               <div
                 style={{
@@ -406,10 +472,10 @@ export function SentencePracticeView({
             }}
           >
             <button
-              onClick={() => session && handleAdvance(session.currentSentenceIndex - 1)}
+              onClick={() => session && handleAdvanceAndPlay(session.currentSentenceIndex - 1)}
               disabled={!isReady || !session || session.currentSentenceIndex === 0}
               aria-label="Previous sentence"
-              title="Previous sentence (Ctrl+←)"
+              title="Previous sentence (Ctrl+<)"
               style={{
                 width: 36,
                 height: 36,
@@ -452,10 +518,10 @@ export function SentencePracticeView({
               )}
             </button>
             <button
-              onClick={() => session && handleAdvance(session.currentSentenceIndex + 1)}
+              onClick={() => session && handleAdvanceAndPlay(session.currentSentenceIndex + 1)}
               disabled={!isReady}
               aria-label="Next sentence"
-              title="Next sentence (Ctrl+→)"
+              title="Next sentence (Ctrl+>)"
               style={{
                 width: 36,
                 height: 36,
@@ -562,9 +628,9 @@ export function SentencePracticeView({
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <button
-                  onClick={() => setResult(null)}
-                  aria-label="Try again"
-                  title="Try again (Ctrl+↑)"
+                  onClick={handleTryAgain}
+                  aria-label="Reset"
+                  title="Reset (Ctrl+/)"
                   disabled={!isReady}
                   style={{
                     width: 40,

@@ -9,14 +9,14 @@ using Microsoft.EntityFrameworkCore;
 namespace Lychee.Api.Controllers;
 
 public record LearnerExerciseResponse(
-    Guid Id, string Title, string Category, string? DifficultyRangeLabel,
+    Guid Id, string Title, string? DifficultyRangeLabel,
     int TrackCount, int CompletedTrackCount, DateTime? LastPracticedAt);
 
 public record LearnerExerciseTrackResponse(
     Guid Id, string Title, string? Description, string Level, TimeSpan Duration,
     int SentenceCount, int WordsPerMinute, bool IsCompletedByUser);
 public record LearnerExerciseUnitResponse(Guid Id, string Title, int Order, List<LearnerExerciseTrackResponse> Tracks);
-public record LearnerExerciseDetailResponse(Guid Id, string Title, string? Description, string Category, List<LearnerExerciseUnitResponse> Units);
+public record LearnerExerciseDetailResponse(Guid Id, string Title, string? Description, List<LearnerExerciseUnitResponse> Units);
 
 [ApiController]
 [Authorize]
@@ -31,6 +31,7 @@ public class LearnerExercisesController : ControllerBase
     {
         var exercises = await _db.Exercises
             .Where(e => e.IsPublished)
+            .OrderBy(e => e.Order)
             .Include(e => e.Units.Where(u => u.IsPublished))
                 .ThenInclude(u => u.Tracks.Where(t => t.IsPublished))
             .ToListAsync();
@@ -72,7 +73,7 @@ public class LearnerExercisesController : ControllerBase
             }
 
             responses.Add(new LearnerExerciseResponse(
-                exercise.Id, exercise.Title, exercise.Category, difficultyRangeLabel,
+                exercise.Id, exercise.Title, difficultyRangeLabel,
                 tracks.Count, completedTrackCount, lastPracticedAt));
         }
 
@@ -107,6 +108,6 @@ public class LearnerExercisesController : ControllerBase
                     t.Sentences.Count, TrackMetrics.ComputeWordsPerMinute(t), completedSet.Contains(t.Id))).ToList()))
             .ToList();
 
-        return Ok(new LearnerExerciseDetailResponse(exercise.Id, exercise.Title, exercise.Description, exercise.Category, units));
+        return Ok(new LearnerExerciseDetailResponse(exercise.Id, exercise.Title, exercise.Description, units));
     }
 }

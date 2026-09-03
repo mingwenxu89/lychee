@@ -27,7 +27,7 @@ public class TracksControllerTests : IClassFixture<LycheeWebApplicationFactory>
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         var exerciseResponse = await client.PostAsJsonAsync("/api/admin/exercises",
-            new { title = $"Exercise {suffix}", description = (string?)null, coverImageUrl = (string?)null, category = "Short Stories" });
+            new { title = $"Exercise {suffix}", description = (string?)null, coverImageUrl = (string?)null });
         var exercise = await exerciseResponse.Content.ReadFromJsonAsync<IdOnly>();
 
         var unitResponse = await client.PostAsJsonAsync($"/api/admin/exercises/{exercise!.Id}/units",
@@ -169,6 +169,37 @@ public class TracksControllerTests : IClassFixture<LycheeWebApplicationFactory>
         Assert.Equal(TimeSpan.FromSeconds(5), track.Duration);
         Assert.False(string.IsNullOrEmpty(track.AudioUrl));
         Assert.False(string.IsNullOrEmpty(track.SrtUrl));
+    }
+
+    [Fact]
+    public async Task Get_AnExistingTrack_ReturnsIt()
+    {
+        var client = AdminClient();
+        var unitId = await CreateUnitAsync(client);
+
+        using var form = new MultipartFormDataContent();
+        form.Add(new ByteArrayContent(Encoding.UTF8.GetBytes("audio")), "AudioFile", "a.mp3");
+        form.Add(new StringContent("1\n00:00:00,000 --> 00:00:01,000\nHi.\n"), "SrtFile", "a.srt");
+        form.Add(new StringContent("A1"), "Level");
+        form.Add(new StringContent("Test Track"), "Title");
+        var createResponse = await client.PostAsync($"/api/admin/units/{unitId}/tracks", form);
+        var track = await createResponse.Content.ReadFromJsonAsync<TrackResponse>();
+
+        var getResponse = await client.GetAsync($"/api/admin/tracks/{track!.Id}");
+
+        Assert.Equal(HttpStatusCode.OK, getResponse.StatusCode);
+        var fetched = await getResponse.Content.ReadFromJsonAsync<TrackResponse>();
+        Assert.Equal("Test Track", fetched!.Title);
+    }
+
+    [Fact]
+    public async Task Get_NonExistentTrack_Returns404()
+    {
+        var client = AdminClient();
+
+        var response = await client.GetAsync($"/api/admin/tracks/{Guid.NewGuid()}");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     [Fact]

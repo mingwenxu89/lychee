@@ -13,7 +13,7 @@ const btnPrimary: React.CSSProperties = {
   border: 'none',
   borderRadius: 999,
   padding: '14px 30px',
-  boxShadow: '0 5px 0 var(--primary-dark)',
+  boxShadow: 'none',
   cursor: 'pointer'
 }
 
@@ -53,7 +53,7 @@ const modalStyle: React.CSSProperties = {
   maxWidth: '92vw',
   background: 'var(--surface)',
   borderRadius: 28,
-  boxShadow: '0 14px 0 var(--line), 0 22px 44px oklch(22% 0.03 270 / 0.22)',
+  boxShadow: 'none',
   padding: '36px 40px',
   display: 'flex',
   flexDirection: 'column',

@@ -1,3 +1,4 @@
+using Lychee.Api.Auth;
 using Lychee.Api.Content;
 using Lychee.Data;
 using Lychee.Storage;
@@ -7,11 +8,12 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Lychee.Api.Controllers;
 
-public record LearnerSentenceResponse(Guid Id, int Index, string Text, TimeSpan StartTime, TimeSpan EndTime);
+public record LearnerSentenceResponse(Guid Id, int Index, string Text, TimeSpan StartTime, TimeSpan EndTime, bool IsFavorited);
 
 public record LearnerTrackResponse(
     Guid Id, Guid UnitId, Guid ExerciseId, string Title, string? Description, string ExerciseTitle, string Level,
-    int WordsPerMinute, TimeSpan Duration, string AudioUrl, List<LearnerSentenceResponse> Sentences, Guid? NextTrackId);
+    int WordsPerMinute, TimeSpan Duration, string AudioUrl, List<LearnerSentenceResponse> Sentences, Guid? NextTrackId,
+    bool IsFavorited);
 
 [ApiController]
 [Authorize]
@@ -47,13 +49,22 @@ public class LearnerTracksController : ControllerBase
         var audioParts = track.AudioFileUrl.Split('/', 2);
         var audioUrl = await _blobStorageService.GetReadUrlAsync(audioParts[0], audioParts[1], TimeSpan.FromHours(2));
 
+        var userId = User.GetUserId();
+        var isTrackFavorited = await _db.TrackFavorites.AnyAsync(f => f.UserId == userId && f.TrackId == track.Id);
+        var favoritedSentenceIds = await _db.SentenceFavorites
+            .Where(f => f.UserId == userId && f.Sentence.TrackId == track.Id)
+            .Select(f => f.SentenceId)
+            .ToListAsync();
+        var favoritedSentenceIdSet = favoritedSentenceIds.ToHashSet();
+
         var sentences = track.Sentences
             .OrderBy(s => s.Index)
-            .Select(s => new LearnerSentenceResponse(s.Id, s.Index, s.Text, s.StartTime, s.EndTime))
+            .Select(s => new LearnerSentenceResponse(s.Id, s.Index, s.Text, s.StartTime, s.EndTime, favoritedSentenceIdSet.Contains(s.Id)))
             .ToList();
 
         return Ok(new LearnerTrackResponse(
             track.Id, track.UnitId, track.Unit.ExerciseId, track.Title, track.Description, track.Unit.Exercise.Title,
-            track.Level, TrackMetrics.ComputeWordsPerMinute(track), track.Duration, audioUrl, sentences, nextTrackId));
+            track.Level, TrackMetrics.ComputeWordsPerMinute(track), track.Duration, audioUrl, sentences, nextTrackId,
+            isTrackFavorited));
     }
 }
