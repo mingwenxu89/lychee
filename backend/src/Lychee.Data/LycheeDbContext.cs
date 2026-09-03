@@ -18,6 +18,8 @@ public class LycheeDbContext : IdentityDbContext<ApplicationUser, IdentityRole<G
     public DbSet<PracticeSession> PracticeSessions => Set<PracticeSession>();
     public DbSet<PracticeRecord> PracticeRecords => Set<PracticeRecord>();
     public DbSet<RecitationAttempt> RecitationAttempts => Set<RecitationAttempt>();
+    public DbSet<FullDictationSession> FullDictationSessions => Set<FullDictationSession>();
+    public DbSet<FullDictationSentenceResult> FullDictationSentenceResults => Set<FullDictationSentenceResult>();
     public DbSet<DailyPracticeLog> DailyPracticeLogs => Set<DailyPracticeLog>();
     public DbSet<Quote> Quotes => Set<Quote>();
 
@@ -54,6 +56,20 @@ public class LycheeDbContext : IdentityDbContext<ApplicationUser, IdentityRole<G
         modelBuilder.Entity<PracticeSession>()
             .HasIndex(s => new { s.UserId, s.TrackId })
             .IsUnique();
+
+        modelBuilder.Entity<FullDictationSession>()
+            .HasIndex(s => new { s.UserId, s.TrackId })
+            .IsUnique();
+
+        modelBuilder.Entity<FullDictationSentenceResult>()
+            .HasIndex(r => new { r.SessionId, r.SentenceId })
+            .IsUnique();
+
+        modelBuilder.Entity<FullDictationSession>()
+            .HasMany<FullDictationSentenceResult>()
+            .WithOne(r => r.Session)
+            .HasForeignKey(r => r.SessionId)
+            .OnDelete(DeleteBehavior.Cascade);
 
         modelBuilder.Entity<RecitationAttempt>()
             .Property(r => r.QualifiedSentenceIds)
