@@ -101,7 +101,7 @@ describe('FullDictationView — Blind round', () => {
     )
   })
 
-  it('finishing a round with everything correct calls complete and onCompleted, skipping the choice screen', async () => {
+  it('finishing a round with everything correct shows the summary screen, then calls onCompleted when Done is clicked', async () => {
     mockFetchSequence([
       { body: { id: 'session-1', trackId: 'track-1', status: 'InProgress', currentRound: 1, currentPhase: 'Blind', correctSentenceIds: [], completedAt: null } },
       { body: { score: 1, finalCorrectSentenceIds: ['s1', 's2'] } }
@@ -116,8 +116,12 @@ describe('FullDictationView — Blind round', () => {
     fireEvent.change(screen.getByPlaceholderText(/type what you hear/i), { target: { value: 'Good morning.' } })
     fireEvent.click(screen.getByRole('button', { name: /next/i }))
 
-    await waitFor(() => expect(onCompleted).toHaveBeenCalledWith(1))
+    await screen.findByText(/100%/)
     expect(screen.queryByRole('button', { name: /continue to round/i })).not.toBeInTheDocument()
+    expect(onCompleted).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: /^done$/i }))
+    expect(onCompleted).toHaveBeenCalledWith(1)
   })
 
   it('clicking "Continue to Round N" starts the next round from a fresh empty answer', async () => {
@@ -139,5 +143,90 @@ describe('FullDictationView — Blind round', () => {
 
     await screen.findByText(/round 2/i)
     expect(screen.queryByRole('button', { name: /continue to round/i })).not.toBeInTheDocument()
+  })
+})
+
+describe('FullDictationView — Focused round', () => {
+  it('switching to focused practice only re-tests the sentence still wrong from Round 1', async () => {
+    mockFetchSequence([
+      { body: { id: 'session-1', trackId: 'track-1', status: 'InProgress', currentRound: 1, currentPhase: 'Blind', correctSentenceIds: [], completedAt: null } },
+      { body: {}, status: 204 }, // Round 1 -> Round 2 checkpoint
+      { body: {}, status: 204 }  // Blind -> Focused checkpoint
+    ])
+
+    render(<FullDictationView track={track} onCompleted={vi.fn()} />)
+    await screen.findByPlaceholderText(/type what you hear/i)
+    fireEvent.change(screen.getByPlaceholderText(/type what you hear/i), { target: { value: 'Hello there.' } })
+    fireEvent.click(screen.getByRole('button', { name: /next/i }))
+    await screen.findByPlaceholderText(/type what you hear/i)
+    fireEvent.change(screen.getByPlaceholderText(/type what you hear/i), { target: { value: 'wrong' } })
+    fireEvent.click(screen.getByRole('button', { name: /next/i }))
+    await screen.findByRole('button', { name: /switch to focused practice/i })
+
+    fireEvent.click(screen.getByRole('button', { name: /switch to focused practice/i }))
+
+    await screen.findByRole('button', { name: /replay/i })
+    expect(screen.getByPlaceholderText(/type what you hear/i)).toBeInTheDocument()
+  })
+
+  it('gives immediate feedback in focused mode and allows retry until correct', async () => {
+    mockFetchSequence([
+      { body: { id: 'session-1', trackId: 'track-1', status: 'InProgress', currentRound: 3, currentPhase: 'Focused', correctSentenceIds: ['s1'], completedAt: null } }
+    ])
+
+    render(<FullDictationView track={track} onCompleted={vi.fn()} />)
+    await screen.findByPlaceholderText(/type what you hear/i)
+
+    fireEvent.change(screen.getByPlaceholderText(/type what you hear/i), { target: { value: 'wrong answer' } })
+    fireEvent.click(screen.getByRole('button', { name: /^check$/i }))
+    expect(await screen.findByText(/incorrect|try again/i)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /replay/i }))
+    fireEvent.change(screen.getByPlaceholderText(/type what you hear/i), { target: { value: 'Good morning.' } })
+    fireEvent.click(screen.getByRole('button', { name: /^check$/i }))
+
+    expect(await screen.findByText(/nice|correct/i)).toBeInTheDocument()
+  })
+
+  it('Skip leaves a sentence uncorrected and moves to the next one', async () => {
+    mockFetchSequence([
+      { body: { id: 'session-1', trackId: 'track-1', status: 'InProgress', currentRound: 3, currentPhase: 'Focused', correctSentenceIds: [], completedAt: null } },
+      { body: {}, status: 204 }
+    ])
+
+    render(<FullDictationView track={track} onCompleted={vi.fn()} />)
+    await screen.findByPlaceholderText(/type what you hear/i)
+    fireEvent.click(screen.getByRole('button', { name: /skip/i }))
+    await waitFor(() => expect(screen.getByPlaceholderText(/type what you hear/i)).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: /finish now/i }))
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith(
+        '/api/learner/full-dictation-sessions/session-1/complete',
+        expect.objectContaining({ body: JSON.stringify({ newlyCorrectSentenceIds: [] }) })
+      )
+    })
+  })
+
+  it('shows the final summary and calls onCompleted with the returned score when Done is clicked', async () => {
+    mockFetchSequence([
+      { body: { id: 'session-1', trackId: 'track-1', status: 'InProgress', currentRound: 3, currentPhase: 'Focused', correctSentenceIds: ['s1'], completedAt: null } },
+      { body: { score: 1, finalCorrectSentenceIds: ['s1', 's2'] } }
+    ])
+    const onCompleted = vi.fn()
+
+    render(<FullDictationView track={track} onCompleted={onCompleted} />)
+    await screen.findByPlaceholderText(/type what you hear/i)
+    fireEvent.change(screen.getByPlaceholderText(/type what you hear/i), { target: { value: 'Good morning.' } })
+    fireEvent.click(screen.getByRole('button', { name: /^check$/i }))
+    await screen.findByRole('button', { name: /next/i })
+    fireEvent.click(screen.getByRole('button', { name: /next/i }))
+
+    await screen.findByText(/100%/)
+    expect(onCompleted).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: /^done$/i }))
+    expect(onCompleted).toHaveBeenCalledWith(1)
   })
 })
