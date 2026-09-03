@@ -189,6 +189,98 @@ public class FullDictationSessionsControllerTests : IClassFixture<LycheeWebAppli
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
+    [Fact]
+    public async Task Checkpoint_WithSentenceIdFromAnotherTrack_DoesNotRecordIt()
+    {
+        var admin = AdminClient();
+        var (trackId, _, _) = await CreateTrackAsync(admin);
+        var (_, otherTrackSentenceId, _) = await CreateTrackAsync(admin, "Other track sentence one.", "Other track sentence two.");
+        var learner = await LearnerClientAsync();
+        var session = await (await learner.PostAsync($"/api/learner/tracks/{trackId}/full-dictation-session/start", null))
+            .Content.ReadFromJsonAsync<FullDictationSessionResponse>();
+
+        var checkpointResponse = await learner.PostAsJsonAsync(
+            $"/api/learner/full-dictation-sessions/{session!.Id}/checkpoint",
+            new { currentRound = 2, currentPhase = "Blind", newlyCorrectSentenceIds = new[] { otherTrackSentenceId } });
+        Assert.Equal(HttpStatusCode.NoContent, checkpointResponse.StatusCode);
+
+        var resumed = await (await learner.PostAsync($"/api/learner/tracks/{trackId}/full-dictation-session/start", null))
+            .Content.ReadFromJsonAsync<FullDictationSessionResponse>();
+        Assert.Empty(resumed!.CorrectSentenceIds);
+    }
+
+    [Fact]
+    public async Task Complete_WithSentenceIdFromAnotherTrack_DoesNotRecordItOrInflateScore()
+    {
+        var admin = AdminClient();
+        var (trackId, firstSentenceId, _) = await CreateTrackAsync(admin);
+        var (_, otherTrackSentenceId, _) = await CreateTrackAsync(admin, "Other track sentence one.", "Other track sentence two.");
+        var learner = await LearnerClientAsync();
+        var session = await (await learner.PostAsync($"/api/learner/tracks/{trackId}/full-dictation-session/start", null))
+            .Content.ReadFromJsonAsync<FullDictationSessionResponse>();
+
+        var completeResponse = await learner.PostAsJsonAsync(
+            $"/api/learner/full-dictation-sessions/{session!.Id}/complete",
+            new { newlyCorrectSentenceIds = new[] { firstSentenceId, otherTrackSentenceId } });
+
+        Assert.Equal(HttpStatusCode.OK, completeResponse.StatusCode);
+        var result = await completeResponse.Content.ReadFromJsonAsync<CompleteResponse>();
+        // Track has 2 sentences; only firstSentenceId is legitimately in-track, so the score
+        // must reflect 1/2, not 2/2 inflated by the foreign sentence id.
+        Assert.Equal(0.5, result!.Score);
+        Assert.Equal(new[] { firstSentenceId }, result.FinalCorrectSentenceIds);
+    }
+
+    [Fact]
+    public async Task Checkpoint_ForAnotherUsersSession_Returns404()
+    {
+        var admin = AdminClient();
+        var (trackId, _, _) = await CreateTrackAsync(admin);
+        var owner = await LearnerClientAsync();
+        var session = await (await owner.PostAsync($"/api/learner/tracks/{trackId}/full-dictation-session/start", null))
+            .Content.ReadFromJsonAsync<FullDictationSessionResponse>();
+
+        var otherUser = await LearnerClientAsync();
+        var response = await otherUser.PostAsJsonAsync(
+            $"/api/learner/full-dictation-sessions/{session!.Id}/checkpoint",
+            new { currentRound = 2, currentPhase = "Blind", newlyCorrectSentenceIds = Array.Empty<Guid>() });
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Complete_ForAnotherUsersSession_Returns404()
+    {
+        var admin = AdminClient();
+        var (trackId, _, _) = await CreateTrackAsync(admin);
+        var owner = await LearnerClientAsync();
+        var session = await (await owner.PostAsync($"/api/learner/tracks/{trackId}/full-dictation-session/start", null))
+            .Content.ReadFromJsonAsync<FullDictationSessionResponse>();
+
+        var otherUser = await LearnerClientAsync();
+        var response = await otherUser.PostAsJsonAsync(
+            $"/api/learner/full-dictation-sessions/{session!.Id}/complete",
+            new { newlyCorrectSentenceIds = Array.Empty<Guid>() });
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Checkpoint_WithUnrecognizedPhase_Returns400()
+    {
+        var admin = AdminClient();
+        var (trackId, _, _) = await CreateTrackAsync(admin);
+        var learner = await LearnerClientAsync();
+        var session = await (await learner.PostAsync($"/api/learner/tracks/{trackId}/full-dictation-session/start", null))
+            .Content.ReadFromJsonAsync<FullDictationSessionResponse>();
+
+        var response = await learner.PostAsJsonAsync(
+            $"/api/learner/full-dictation-sessions/{session!.Id}/checkpoint",
+            new { currentRound = 2, currentPhase = "NotARealPhase", newlyCorrectSentenceIds = Array.Empty<Guid>() });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
     private record FullDictationSessionResponse(
         Guid Id, Guid TrackId, string Status, int CurrentRound, string CurrentPhase,
         List<Guid> CorrectSentenceIds, DateTime? CompletedAt);

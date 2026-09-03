@@ -97,10 +97,13 @@ public class FullDictationSessionsController : ControllerBase
         var session = await _db.FullDictationSessions.FirstOrDefaultAsync(s => s.Id == sessionId && s.UserId == userId);
         if (session is null) return NotFound();
 
+        if (!Enum.TryParse<FullDictationPhase>(request.CurrentPhase, out var currentPhase))
+            return BadRequest($"Unrecognized phase '{request.CurrentPhase}'.");
+
         await UpsertCorrectResultsAsync(session, request.NewlyCorrectSentenceIds);
 
         session.CurrentRound = request.CurrentRound;
-        session.CurrentPhase = Enum.Parse<FullDictationPhase>(request.CurrentPhase);
+        session.CurrentPhase = currentPhase;
         session.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
 
@@ -135,8 +138,19 @@ public class FullDictationSessionsController : ControllerBase
     {
         if (newlyCorrectSentenceIds.Count == 0) return;
 
+        // Constrain to sentence ids that actually belong to this session's track — a client
+        // could otherwise submit ids from an unrelated track, inflating its score and creating
+        // FullDictationSentenceResult rows that point outside the track. Grading itself is
+        // client-side by design, so this is a data-integrity guard, not a security boundary.
+        var validSentenceIds = await _db.Sentences
+            .Where(s => s.TrackId == session.TrackId && newlyCorrectSentenceIds.Contains(s.Id))
+            .Select(s => s.Id)
+            .ToListAsync();
+
+        if (validSentenceIds.Count == 0) return;
+
         var existing = await _db.FullDictationSentenceResults
-            .Where(r => r.SessionId == session.Id && newlyCorrectSentenceIds.Contains(r.SentenceId))
+            .Where(r => r.SessionId == session.Id && validSentenceIds.Contains(r.SentenceId))
             .ToListAsync();
         var existingSentenceIds = existing.Select(r => r.SentenceId).ToHashSet();
 
@@ -145,7 +159,7 @@ public class FullDictationSessionsController : ControllerBase
             result.IsCorrect = true;
         }
 
-        foreach (var sentenceId in newlyCorrectSentenceIds.Distinct().Where(id => !existingSentenceIds.Contains(id)))
+        foreach (var sentenceId in validSentenceIds.Distinct().Where(id => !existingSentenceIds.Contains(id)))
         {
             _db.FullDictationSentenceResults.Add(new FullDictationSentenceResult
             {

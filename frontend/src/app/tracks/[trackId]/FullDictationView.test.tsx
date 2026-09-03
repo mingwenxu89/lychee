@@ -124,6 +124,81 @@ describe('FullDictationView — Blind round', () => {
     expect(onCompleted).toHaveBeenCalledWith(1)
   })
 
+  it('finishes the round when the LAST (trailing) sentence is the already-correct one, not just a first/middle one', async () => {
+    // s2 (the last step) is already correct from a prior round, so it never requires input and
+    // only auto-advances via the timeupdate/ended playback handlers — there is no submit click
+    // to trigger the old "was this the last step" check in handleAdvanceStep. Before the fix,
+    // stepIndex would run past roundSteps.length and the round would never finish.
+    const fetchMock = mockFetchSequence([
+      { body: { id: 'session-1', trackId: 'track-1', status: 'InProgress', currentRound: 2, currentPhase: 'Blind', correctSentenceIds: ['s2'], completedAt: null } },
+      { body: {}, status: 204 }
+    ])
+
+    render(<FullDictationView track={track} onCompleted={vi.fn()} />)
+    await screen.findByPlaceholderText(/type what you hear/i)
+    fireEvent.change(screen.getByPlaceholderText(/type what you hear/i), { target: { value: 'wrong' } })
+    fireEvent.click(screen.getByRole('button', { name: /next/i }))
+
+    // Now on s2, the already-correct trailing step: no textarea, playback just runs to the end.
+    await waitFor(() => expect(screen.queryByPlaceholderText(/type what you hear/i)).not.toBeInTheDocument())
+
+    const audio = document.querySelector('audio')!
+    Object.defineProperty(audio, 'currentTime', { value: 4, writable: true })
+    fireEvent(audio, new Event('timeupdate'))
+
+    // The round must actually finish and reach the round-choice screen — not get stuck on a
+    // dead screen with stepIndex pointing past the end of roundSteps.
+    await screen.findByRole('button', { name: /continue to round 3/i })
+    expect(screen.getByRole('button', { name: /switch to focused practice/i })).toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/learner/full-dictation-sessions/session-1/checkpoint',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ currentRound: 3, currentPhase: 'Blind', newlyCorrectSentenceIds: [] })
+      })
+    )
+  })
+
+  it('finishes an empty-track round immediately instead of showing a stuck empty screen', async () => {
+    const emptyTrack: LearnerTrack = { ...track, sentences: [] }
+    mockFetchSequence([
+      { body: { id: 'session-1', trackId: 'track-1', status: 'InProgress', currentRound: 1, currentPhase: 'Blind', correctSentenceIds: [], completedAt: null } },
+      { body: { score: 0, finalCorrectSentenceIds: [] } }
+    ])
+
+    render(<FullDictationView track={emptyTrack} onCompleted={vi.fn()} />)
+
+    await screen.findByText(/0%/)
+  })
+
+  it('shows an error and does not advance to the round-choice screen when the checkpoint call fails', async () => {
+    const fetchMock = mockFetchSequence([
+      { body: { id: 'session-1', trackId: 'track-1', status: 'InProgress', currentRound: 1, currentPhase: 'Blind', correctSentenceIds: [], completedAt: null } },
+      { body: { error: 'nope' }, status: 500 },
+      { body: {}, status: 204 }
+    ])
+
+    render(<FullDictationView track={track} onCompleted={vi.fn()} />)
+    await screen.findByPlaceholderText(/type what you hear/i)
+    fireEvent.change(screen.getByPlaceholderText(/type what you hear/i), { target: { value: 'Hello there.' } })
+    fireEvent.click(screen.getByRole('button', { name: /next/i }))
+    await screen.findByPlaceholderText(/type what you hear/i)
+    fireEvent.change(screen.getByPlaceholderText(/type what you hear/i), { target: { value: 'wrong' } })
+    fireEvent.click(screen.getByRole('button', { name: /next/i }))
+
+    // The checkpoint call failed (500): local state must not have advanced to the round-choice
+    // screen — that would tell the learner their round-1 progress saved when it didn't.
+    await screen.findByRole('alert')
+    expect(screen.getByRole('alert')).toHaveTextContent(/failed to save/i)
+    expect(screen.queryByRole('button', { name: /continue to round 2/i })).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /retry/i }))
+
+    await screen.findByRole('button', { name: /continue to round 2/i })
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledTimes(4)
+  })
+
   it('clicking "Continue to Round N" starts the next round from a fresh empty answer', async () => {
     mockFetchSequence([
       { body: { id: 'session-1', trackId: 'track-1', status: 'InProgress', currentRound: 1, currentPhase: 'Blind', correctSentenceIds: [], completedAt: null } },
@@ -167,6 +242,17 @@ describe('FullDictationView — Focused round', () => {
 
     await screen.findByRole('button', { name: /replay/i })
     expect(screen.getByPlaceholderText(/type what you hear/i)).toBeInTheDocument()
+    // The defining behavior of the handoff: only the one sentence still wrong from Round 1 (s2)
+    // is in this focused round — not both sentences. This would still pass with the textarea/
+    // Replay assertions alone even if the wrong logic re-tested every sentence, so assert the
+    // step count directly.
+    expect(screen.getByText(/sentence 1 of 1/i)).toBeInTheDocument()
+
+    // And prove it's actually grading s2 (not s1, which was already correct in Round 1) by
+    // submitting s2's correct text and checking for immediate correct feedback.
+    fireEvent.change(screen.getByPlaceholderText(/type what you hear/i), { target: { value: 'Good morning.' } })
+    fireEvent.click(screen.getByRole('button', { name: /^check$/i }))
+    expect(await screen.findByText(/nice|correct/i)).toBeInTheDocument()
   })
 
   it('gives immediate feedback in focused mode and allows retry until correct', async () => {

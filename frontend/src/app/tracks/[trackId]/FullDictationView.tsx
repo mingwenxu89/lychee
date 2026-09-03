@@ -65,7 +65,18 @@ export function FullDictationView({
   const [focusedRoundNewlyCorrect, setFocusedRoundNewlyCorrect] = useState<Set<string>>(new Set())
   const [feedback, setFeedback] = useState<{ words: WordDiff[]; isCorrect: boolean } | null>(null)
   const [summary, setSummary] = useState<SummaryState | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const audioRef = useRef<HTMLAudioElement>(null)
+  // Guards the state-derived round-completion effect below so a finished round's checkpoint/
+  // complete call fires exactly once per round, even though stepIndex staying >= roundSteps.length
+  // (while the round-choice screen or an error is shown) would otherwise re-satisfy the effect's
+  // condition on every unrelated re-render.
+  const blindRoundFinishRequestedRef = useRef(false)
+  // Holds a thunk that redoes whatever checkpoint/complete call last failed, so the "Retry"
+  // button rendered alongside actionError can retry the exact same request without the caller
+  // needing to re-derive its arguments. Cleared (null) whenever the last attempt succeeded.
+  const retryActionRef = useRef<(() => void) | null>(null)
 
   useEffect(() => {
     async function init() {
@@ -118,17 +129,47 @@ export function FullDictationView({
     setAwaitingInput(currentStep!.requiresInput)
     audio.play()
 
-    function onTimeUpdate() {
-      if (audio.currentTime < end) return
+    function advancePastStep() {
       audio.pause()
       if (!currentStep!.requiresInput) {
         setStepIndex((i) => i + 1)
       }
     }
+    function onTimeUpdate() {
+      if (audio.currentTime < end) return
+      advancePastStep()
+    }
+    // 'ended' backs up 'timeupdate' for the final sentence: if the SRT's endTime slightly
+    // exceeds the real audio duration, currentTime may never quite reach `end` via timeupdate,
+    // but playback still fires 'ended' when it runs out — without this, that step would never
+    // auto-advance.
+    function onEnded() {
+      advancePastStep()
+    }
     audio.addEventListener('timeupdate', onTimeUpdate)
-    return () => audio.removeEventListener('timeupdate', onTimeUpdate)
+    audio.addEventListener('ended', onEnded)
+    return () => {
+      audio.removeEventListener('timeupdate', onTimeUpdate)
+      audio.removeEventListener('ended', onEnded)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stepIndex, currentSentence?.id, roundChoiceVisible, session?.currentPhase])
+
+  // Round completion is state-derived rather than only triggered from handleAdvanceStep: an
+  // already-correct trailing step advances stepIndex via the timeupdate/ended handlers above
+  // with no submit involved, so relying solely on handleAdvanceStep's "was this the last step"
+  // check misses that path entirely and leaves stepIndex pointing past the end of roundSteps
+  // forever (currentStep becomes null — a dead screen). This also covers the zero-sentence-track
+  // case: roundSteps is empty and stepIndex(0) >= roundSteps.length(0) is true from the start.
+  useEffect(() => {
+    if (!session || session.currentPhase !== 'Blind') return
+    if (roundChoiceVisible) return
+    if (stepIndex < roundSteps.length) return
+    if (blindRoundFinishRequestedRef.current) return
+    blindRoundFinishRequestedRef.current = true
+    finishBlindRound(roundAnswers)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.currentPhase, roundChoiceVisible, stepIndex, roundSteps, roundAnswers])
 
   // Focused mode plays each sentence once automatically when the step begins; the persisted
   // 'timeupdate' listener also backs the Replay button below, which just rewinds and calls
@@ -162,6 +203,31 @@ export function FullDictationView({
     }
   }, [])
 
+  // Shared POST helper for all 4 checkpoint/complete calls: checks response.ok and catches a
+  // network-level rejection (not just a non-ok response), reporting either the same way via
+  // actionError instead of letting it become an unhandled rejection. Returns null on any
+  // failure so callers can bail out without advancing local state past what was actually
+  // persisted (don't flip roundChoiceVisible, don't fold newly-correct ids into
+  // correctSentenceIds, etc.) — the learner shouldn't be told progress saved when it didn't.
+  async function postJson(url: string, body: unknown): Promise<Response | null> {
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      })
+      if (!response.ok) {
+        setActionError('Failed to save your progress. Please try again.')
+        return null
+      }
+      setActionError(null)
+      return response
+    } catch {
+      setActionError('Failed to save your progress. Please try again.')
+      return null
+    }
+  }
+
   // Shared by both phases' round-end logic: posts to /complete and, once a score comes back,
   // hands off to the final summary screen rather than calling onCompleted directly — the
   // summary's own Done button is what fires onCompleted. A response with no parseable body
@@ -169,11 +235,14 @@ export function FullDictationView({
   // summary unset rather than throwing an unhandled rejection.
   async function completeSession(newlyCorrectSentenceIds: string[]) {
     if (!session) return
-    const response = await fetch(`/api/learner/full-dictation-sessions/${session.id}/complete`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ newlyCorrectSentenceIds })
-    })
+    setIsSubmitting(true)
+    const response = await postJson(`/api/learner/full-dictation-sessions/${session.id}/complete`, { newlyCorrectSentenceIds })
+    setIsSubmitting(false)
+    if (!response) {
+      retryActionRef.current = () => completeSession(newlyCorrectSentenceIds)
+      return
+    }
+    retryActionRef.current = null
     try {
       const result: CompleteResponse = await response.json()
       setSummary({ score: result.score, finalCorrectSentenceIds: result.finalCorrectSentenceIds })
@@ -193,32 +262,40 @@ export function FullDictationView({
     }
 
     const nextRound = session.currentRound + 1
-    await fetch(`/api/learner/full-dictation-sessions/${session.id}/checkpoint`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ currentRound: nextRound, currentPhase: 'Blind', newlyCorrectSentenceIds: newlyCorrect })
+    setIsSubmitting(true)
+    const response = await postJson(`/api/learner/full-dictation-sessions/${session.id}/checkpoint`, {
+      currentRound: nextRound,
+      currentPhase: 'Blind',
+      newlyCorrectSentenceIds: newlyCorrect
     })
+    setIsSubmitting(false)
+    if (!response) {
+      retryActionRef.current = () => finishBlindRound(finalAnswers)
+      return
+    }
+    retryActionRef.current = null
     setCorrectSentenceIds(updatedCorrectIds)
     setSession({ ...session, currentRound: nextRound })
     setRoundChoiceVisible(true)
   }
 
+  // Only records the answer and advances stepIndex — round completion is entirely state-derived
+  // (see the effect above), so this no longer needs to special-case "was this the last step":
+  // that check missed the auto-advance-through-an-already-correct-last-step path entirely.
   function handleAdvanceStep() {
     if (!currentStep) return
     const nextAnswers = new Map(roundAnswers)
     if (currentStep.requiresInput) nextAnswers.set(currentStep.sentenceId, answer)
     setAnswer('')
     setAwaitingInput(false)
-
-    if (stepIndex + 1 >= roundSteps.length) {
-      finishBlindRound(nextAnswers)
-    } else {
-      setRoundAnswers(nextAnswers)
-      setStepIndex(stepIndex + 1)
-    }
+    setRoundAnswers(nextAnswers)
+    setStepIndex((i) => i + 1)
   }
 
   function handleContinueBlindRound() {
+    blindRoundFinishRequestedRef.current = false
+    retryActionRef.current = null
+    setActionError(null)
     setRoundSteps(buildBlindRoundSteps(track.sentences, correctSentenceIds))
     setStepIndex(0)
     setRoundAnswers(new Map())
@@ -230,11 +307,18 @@ export function FullDictationView({
     if (!session) return
     // No new corrections at this transition — the Blind round's own checkpoint (in
     // finishBlindRound) already recorded them.
-    await fetch(`/api/learner/full-dictation-sessions/${session.id}/checkpoint`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ currentRound: session.currentRound, currentPhase: 'Focused', newlyCorrectSentenceIds: [] })
+    setIsSubmitting(true)
+    const response = await postJson(`/api/learner/full-dictation-sessions/${session.id}/checkpoint`, {
+      currentRound: session.currentRound,
+      currentPhase: 'Focused',
+      newlyCorrectSentenceIds: []
     })
+    setIsSubmitting(false)
+    if (!response) {
+      retryActionRef.current = () => handleSwitchToFocused()
+      return
+    }
+    retryActionRef.current = null
     setSession((s) => (s ? { ...s, currentPhase: 'Focused' } : s))
     setFocusedSteps(buildFocusedRoundSteps(track.sentences, correctSentenceIds))
     setFocusedStepIndex(0)
@@ -272,11 +356,18 @@ export function FullDictationView({
     }
 
     const nextRound = session.currentRound + 1
-    await fetch(`/api/learner/full-dictation-sessions/${session.id}/checkpoint`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ currentRound: nextRound, currentPhase: 'Focused', newlyCorrectSentenceIds: [...focusedRoundNewlyCorrect] })
+    setIsSubmitting(true)
+    const response = await postJson(`/api/learner/full-dictation-sessions/${session.id}/checkpoint`, {
+      currentRound: nextRound,
+      currentPhase: 'Focused',
+      newlyCorrectSentenceIds: [...focusedRoundNewlyCorrect]
     })
+    setIsSubmitting(false)
+    if (!response) {
+      retryActionRef.current = () => finishFocusedRound()
+      return
+    }
+    retryActionRef.current = null
     setCorrectSentenceIds(updatedCorrectIds)
     setSession({ ...session, currentRound: nextRound })
     setFocusedRoundNewlyCorrect(new Set())
@@ -299,6 +390,8 @@ export function FullDictationView({
   }
 
   function handleContinueFocusedRound() {
+    retryActionRef.current = null
+    setActionError(null)
     setFocusedSteps(buildFocusedRoundSteps(track.sentences, correctSentenceIds))
     setFocusedStepIndex(0)
     setFocusedRoundNewlyCorrect(new Set())
@@ -350,16 +443,31 @@ export function FullDictationView({
     )
   }
 
+  // Shared across the Focused and Blind branches below so a failed checkpoint/complete call
+  // surfaces the same way regardless of which screen was showing when it failed, with a Retry
+  // button that redoes exactly the request that failed (see retryActionRef).
+  const actionErrorBanner = actionError ? (
+    <div role="alert" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+      <span style={{ color: 'var(--error)', fontWeight: 700 }}>{actionError}</span>
+      {retryActionRef.current && (
+        <button onClick={() => retryActionRef.current?.()} disabled={isSubmitting} style={btnGhost}>
+          Retry
+        </button>
+      )}
+    </div>
+  ) : null
+
   if (session?.currentPhase === 'Focused') {
     if (roundChoiceVisible) {
       return (
         <div style={{ ...cardStyle, padding: 26, display: 'flex', flexDirection: 'column', gap: 18, width: 760, maxWidth: '100%' }}>
           <span style={{ fontWeight: 800, fontSize: 14, color: 'var(--ink-soft)' }}>Round {session.currentRound}</span>
+          {actionErrorBanner}
           <div style={{ display: 'flex', gap: 14 }}>
-            <button onClick={handleContinueFocusedRound} style={btnPrimary}>
+            <button onClick={handleContinueFocusedRound} disabled={isSubmitting} style={btnPrimary}>
               Continue to Focused Round {session.currentRound}
             </button>
-            <button onClick={handleFinishNow} style={btnGhost}>
+            <button onClick={handleFinishNow} disabled={isSubmitting} style={btnGhost}>
               Finish Now
             </button>
           </div>
@@ -380,10 +488,20 @@ export function FullDictationView({
             {focusedTotalSteps > 0 && ` · Sentence ${Math.min(focusedStepNumber, focusedTotalSteps)} of ${focusedTotalSteps}`}
           </span>
 
-          <div>
-            <button onClick={handleFocusedReplay} style={btnGhost}>
+          {actionErrorBanner}
+
+          <div style={{ display: 'flex', gap: 12 }}>
+            <button onClick={handleFocusedReplay} disabled={!currentFocusedSentence} style={btnGhost}>
               Replay
             </button>
+            {/* Hoisted out of the currentFocusedSentence-gated block below so there's still a way
+                forward if a session resumes directly into Focused with nothing left to focus on
+                (e.g. a prior /complete call failed after everything was already correct). */}
+            {!currentFocusedSentence && (
+              <button onClick={handleFinishNow} disabled={isSubmitting} style={btnGhost}>
+                Finish Now
+              </button>
+            )}
           </div>
 
           {currentFocusedSentence && (
@@ -416,7 +534,7 @@ export function FullDictationView({
               />
               <div style={{ display: 'flex', gap: 12 }}>
                 {feedback?.isCorrect ? (
-                  <button onClick={advanceFocusedStep} title="Next (Enter)" style={btnPrimary}>
+                  <button onClick={advanceFocusedStep} disabled={isSubmitting} title="Next (Enter)" style={btnPrimary}>
                     Next
                   </button>
                 ) : (
@@ -424,12 +542,12 @@ export function FullDictationView({
                     <button onClick={handleFocusedSubmit} title="Check (Enter)" style={btnPrimary}>
                       Check
                     </button>
-                    <button onClick={advanceFocusedStep} style={btnGhost}>
+                    <button onClick={advanceFocusedStep} disabled={isSubmitting} style={btnGhost}>
                       Skip
                     </button>
                   </>
                 )}
-                <button onClick={handleFinishNow} style={btnGhost}>
+                <button onClick={handleFinishNow} disabled={isSubmitting} style={btnGhost}>
                   Finish Now
                 </button>
               </div>
@@ -481,12 +599,14 @@ export function FullDictationView({
           </span>
         )}
 
+        {actionErrorBanner}
+
         {roundChoiceVisible ? (
           <div style={{ display: 'flex', gap: 14 }}>
-            <button onClick={handleContinueBlindRound} style={btnPrimary}>
+            <button onClick={handleContinueBlindRound} disabled={isSubmitting} style={btnPrimary}>
               Continue to Round {session!.currentRound}
             </button>
-            <button onClick={handleSwitchToFocused} style={btnGhost}>
+            <button onClick={handleSwitchToFocused} disabled={isSubmitting} style={btnGhost}>
               Switch to Focused Practice
             </button>
           </div>
