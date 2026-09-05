@@ -110,7 +110,7 @@ export default function ExerciseDetailPage() {
                 <ChevronIcon expanded={isExpanded} />
                 <span style={{ fontWeight: 700, fontSize: 16 }}>{unit.title}</span>
               </div>
-              <span style={{ background: 'var(--primary-soft)', color: 'var(--primary-dark)', fontSize: 12, fontWeight: 700, padding: '4px 12px', borderRadius: 999 }}>
+              <span style={{ background: 'var(--leaf-soft)', color: 'var(--leaf-dark)', fontSize: 12, fontWeight: 700, padding: '4px 12px', borderRadius: 999 }}>
                 {completedCount} / {unit.tracks.length} completed
               </span>
             </button>
@@ -127,10 +127,10 @@ export default function ExerciseDetailPage() {
                       gap: 6,
                       padding: '14px 16px',
                       borderRadius: 12,
-                      border: track.isCompletedByUser ? '1px solid oklch(80% 0.08 20)' : '1px solid var(--line)',
+                      border: track.isCompletedByUser ? '1px solid oklch(80% 0.08 145)' : '1px solid var(--line)',
                       textDecoration: 'none',
                       color: 'inherit',
-                      background: track.isCompletedByUser ? 'oklch(95% 0.04 20)' : 'var(--surface)',
+                      background: track.isCompletedByUser ? 'var(--leaf-soft)' : 'var(--surface)',
                       minWidth: 0
                     }}
                   >

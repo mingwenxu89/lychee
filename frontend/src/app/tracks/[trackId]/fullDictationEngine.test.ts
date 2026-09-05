@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildBlindRoundSteps, buildFocusedRoundSteps, gradeBlindRound, computeScore } from './fullDictationEngine'
+import { buildBlindRoundSteps, gradeBlindRound, computeScore } from './fullDictationEngine'
 
 const sentences = [
   { id: 's1', text: 'Hello there.', startTime: '00:00:00', endTime: '00:00:02' },
@@ -8,37 +8,9 @@ const sentences = [
 ]
 
 describe('buildBlindRoundSteps', () => {
-  it('marks every sentence as requiring input when none are correct yet', () => {
-    const steps = buildBlindRoundSteps(sentences, new Set())
-    expect(steps).toEqual([
-      { sentenceId: 's1', requiresInput: true },
-      { sentenceId: 's2', requiresInput: true },
-      { sentenceId: 's3', requiresInput: true }
-    ])
-  })
-
-  it('marks already-correct sentences as not requiring input, in original order', () => {
-    const steps = buildBlindRoundSteps(sentences, new Set(['s2']))
-    expect(steps).toEqual([
-      { sentenceId: 's1', requiresInput: true },
-      { sentenceId: 's2', requiresInput: false },
-      { sentenceId: 's3', requiresInput: true }
-    ])
-  })
-})
-
-describe('buildFocusedRoundSteps', () => {
-  it('includes only not-yet-correct sentences, all requiring input', () => {
-    const steps = buildFocusedRoundSteps(sentences, new Set(['s2']))
-    expect(steps).toEqual([
-      { sentenceId: 's1', requiresInput: true },
-      { sentenceId: 's3', requiresInput: true }
-    ])
-  })
-
-  it('returns an empty list when everything is already correct', () => {
-    const steps = buildFocusedRoundSteps(sentences, new Set(['s1', 's2', 's3']))
-    expect(steps).toEqual([])
+  it('includes every sentence, in original order — every round re-tests everything, not just what is still wrong', () => {
+    const steps = buildBlindRoundSteps(sentences)
+    expect(steps).toEqual([{ sentenceId: 's1' }, { sentenceId: 's2' }, { sentenceId: 's3' }])
   })
 })
 

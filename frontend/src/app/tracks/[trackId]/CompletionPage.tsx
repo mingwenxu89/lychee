@@ -31,7 +31,7 @@ export function CompletionPage({
   onPracticeAgain,
   onNextTrack
 }: {
-  accuracyScore: number
+  accuracyScore: number | null
   hasNextTrack: boolean
   onPracticeAgain: () => void
   onNextTrack: () => void
@@ -74,20 +74,22 @@ export function CompletionPage({
 
       <h2 style={{ margin: 0, fontSize: 32, fontWeight: 700, color: 'var(--primary-dark)' }}>Nice work!</h2>
 
-      <div
-        style={{
-          background: 'oklch(96% 0.01 80)',
-          borderRadius: 16,
-          padding: '14px 22px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 4,
-          alignItems: 'center'
-        }}
-      >
-        <span style={{ fontSize: 24, fontWeight: 800, color: 'var(--primary)' }}>{Math.round(accuracyScore * 100)}%</span>
-        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink-faint)' }}>Accuracy</span>
-      </div>
+      {accuracyScore !== null && (
+        <div
+          style={{
+            background: 'oklch(96% 0.01 80)',
+            borderRadius: 16,
+            padding: '14px 22px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 4,
+            alignItems: 'center'
+          }}
+        >
+          <span style={{ fontSize: 24, fontWeight: 800, color: 'var(--primary)' }}>{Math.round(accuracyScore * 100)}%</span>
+          <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink-faint)' }}>Accuracy</span>
+        </div>
+      )}
 
       {quote && (
         <div style={{ background: 'var(--leaf-soft)', borderRadius: 18, padding: '20px 24px', width: '100%', display: 'flex', flexDirection: 'column', gap: 6 }}>

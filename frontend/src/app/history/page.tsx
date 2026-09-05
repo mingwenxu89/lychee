@@ -88,7 +88,7 @@ export default function HistoryPage() {
                 }}
               >
                 {entry.status === 'Completed'
-                  ? `Completed · ${Math.round((entry.accuracy ?? 0) * 100)}%`
+                  ? entry.accuracy !== null ? `Completed · ${Math.round(entry.accuracy * 100)}%` : 'Completed'
                   : `In Progress · Sentence ${(entry.currentSentenceIndex ?? 0) + 1}/${entry.totalSentences ?? 0}`}
               </span>
 

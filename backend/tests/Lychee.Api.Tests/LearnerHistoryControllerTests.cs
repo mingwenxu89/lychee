@@ -92,8 +92,10 @@ public class LearnerHistoryControllerTests : IClassFixture<LycheeWebApplicationF
     }
 
     [Fact]
-    public async Task List_CompletedPracticeSession_IncludesComputedAccuracy()
+    public async Task List_CompletedPracticeSession_HasNoAccuracy()
     {
+        // Sentence Dictation has no completion score (see PracticeSessionsController.Advance) —
+        // a completed Practice entry always reports a null Accuracy, unlike Recitation below.
         var admin = AdminClient();
         var trackId = await CreateTrackWithTwoSentencesAsync(admin);
         var jwtTokenService = _factory.Services.GetRequiredService<IJwtTokenService>();
@@ -107,7 +109,7 @@ public class LearnerHistoryControllerTests : IClassFixture<LycheeWebApplicationF
         foreach (var sentence in track!.Sentences)
         {
             await learner.PostAsJsonAsync($"/api/learner/practice-sessions/{session!.Id}/submit",
-                new { sentenceId = sentence.Id, submittedText = sentence.Text });
+                new { sentenceId = sentence.Id });
         }
         await learner.PostAsJsonAsync($"/api/learner/practice-sessions/{session!.Id}/advance", new { toIndex = 2 });
 
@@ -116,7 +118,7 @@ public class LearnerHistoryControllerTests : IClassFixture<LycheeWebApplicationF
         var entries = await response.Content.ReadFromJsonAsync<List<HistoryEntryResponse>>();
         var entry = entries!.Single(e => e.TrackId == trackId);
         Assert.Equal("Completed", entry.Status);
-        Assert.Equal(1.0, entry.Accuracy);
+        Assert.Null(entry.Accuracy);
     }
 
     [Fact]

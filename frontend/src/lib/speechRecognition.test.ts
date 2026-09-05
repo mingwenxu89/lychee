@@ -111,4 +111,21 @@ describe('createContinuousRecognizer', () => {
 
     expect(fakeInstance!.stop).toHaveBeenCalled()
   })
+
+  it('resetSegment() marks a new boundary so a later onresult only reports text recognized since that mark, without stopping the recognizer', () => {
+    const onTranscriptUpdate = vi.fn()
+    const recognizer = createContinuousRecognizer(onTranscriptUpdate)
+    recognizer.start()
+
+    fakeInstance!.onresult!({ results: [[{ transcript: 'Hello there' }]] })
+    expect(onTranscriptUpdate).toHaveBeenLastCalledWith('Hello there')
+
+    recognizer.resetSegment()
+    expect(fakeInstance!.stop).not.toHaveBeenCalled()
+
+    // The underlying API's event.results never shrinks — the old entry is still index 0 — but
+    // after resetSegment() only text from the new boundary onward should be reported.
+    fakeInstance!.onresult!({ results: [[{ transcript: 'Hello there' }], [{ transcript: 'Good morning' }]] })
+    expect(onTranscriptUpdate).toHaveBeenLastCalledWith('Good morning')
+  })
 })

@@ -1,36 +1,50 @@
 import { compare, countWords, type WordDiff } from './textComparer'
 
-export type RecitationScoreResult = { score: number; words: WordDiff[]; qualifiedSentenceIds: string[] }
+export type SentenceRecitationResult = { sentenceId: string; words: WordDiff[]; isQualified: boolean }
+export type RecitationScoreResult = { score: number; sentenceResults: SentenceRecitationResult[] }
 
-// Walks the whole-track word diff using each sentence's known word count as a
-// boundary, marking a sentence "qualified" when every one of its words landed
-// as Correct within that boundary — mirrors the backend's previous per-sentence
-// qualification logic, now computed client-side alongside the diff itself.
+// Walks the whole-track word diff using each sentence's known word count as a boundary,
+// grouping the diffed words back into their own sentence (any Extra words seen before that
+// boundary closes are attached to the sentence still open) so the result can be shown and
+// scored per sentence — mirrors Full Dictation's per-sentence grading, applied after the fact
+// to one continuous recitation instead of gathering it one sentence at a time.
 export function scoreRecitation(sentences: { id: string; text: string }[], submittedText: string): RecitationScoreResult {
   const referenceText = sentences.map((s) => s.text).join(' ')
   const comparison = compare(referenceText, submittedText)
 
   const sentenceWordCounts = sentences.map((s) => countWords(s.text))
-  const qualifiedSentenceIds: string[] = []
-  let wordCursor = 0
+  const sentenceResults: SentenceRecitationResult[] = []
+
   let sentenceIndex = 0
-  let sentenceCorrectCount = 0
-  let currentSentenceWordTarget = sentenceIndex < sentenceWordCounts.length ? sentenceWordCounts[sentenceIndex] : 0
+  let wordsSeenInSentence = 0
+  let correctInSentence = 0
+  let currentWords: WordDiff[] = []
 
   for (const word of comparison.words) {
-    if (word.status === 'Extra') continue
-    if (word.status === 'Correct') sentenceCorrectCount++
-    wordCursor++
+    if (sentenceIndex >= sentenceWordCounts.length) break
 
-    if (sentenceIndex < sentenceWordCounts.length && wordCursor === currentSentenceWordTarget) {
-      if (sentenceWordCounts[sentenceIndex] > 0 && sentenceCorrectCount === sentenceWordCounts[sentenceIndex]) {
-        qualifiedSentenceIds.push(sentences[sentenceIndex].id)
-      }
+    currentWords.push(word)
+    if (word.status === 'Extra') continue
+
+    wordsSeenInSentence++
+    if (word.status === 'Correct') correctInSentence++
+
+    if (wordsSeenInSentence === sentenceWordCounts[sentenceIndex]) {
+      const expected = sentenceWordCounts[sentenceIndex]
+      sentenceResults.push({
+        sentenceId: sentences[sentenceIndex].id,
+        words: currentWords,
+        isQualified: expected > 0 && correctInSentence === expected
+      })
       sentenceIndex++
-      sentenceCorrectCount = 0
-      if (sentenceIndex < sentenceWordCounts.length) currentSentenceWordTarget += sentenceWordCounts[sentenceIndex]
+      wordsSeenInSentence = 0
+      correctInSentence = 0
+      currentWords = []
     }
   }
 
-  return { score: comparison.accuracyScore, words: comparison.words, qualifiedSentenceIds }
+  const qualifiedCount = sentenceResults.filter((s) => s.isQualified).length
+  const score = sentences.length === 0 ? 0 : qualifiedCount / sentences.length
+
+  return { score, sentenceResults }
 }

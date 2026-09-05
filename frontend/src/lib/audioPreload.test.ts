@@ -15,7 +15,7 @@ describe('preloadAudio', () => {
   it('fetches the URL and returns an object URL for the resulting blob', async () => {
     const objectUrl = await preloadAudio('https://example.test/audio/track.mp3')
 
-    expect(fetch).toHaveBeenCalledWith('https://example.test/audio/track.mp3')
+    expect(fetch).toHaveBeenCalledWith('https://example.test/audio/track.mp3', { cache: 'no-store' })
     expect(objectUrl).toBe('blob:fake-object-url')
   })
 

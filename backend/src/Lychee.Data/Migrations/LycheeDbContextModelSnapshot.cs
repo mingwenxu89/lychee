@@ -162,6 +162,12 @@ namespace Lychee.Data.Migrations
                     b.Property<Guid>("SessionId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("SubmittedText")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("");
+
                     b.HasKey("Id");
 
                     b.HasIndex("SentenceId");
@@ -170,81 +176,6 @@ namespace Lychee.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("FullDictationSentenceResults");
-                });
-
-            modelBuilder.Entity("Lychee.Data.Entities.FullDictationSession", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime?>("CompletedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("CurrentPhase")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("CurrentRound")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("Status")
-                        .HasColumnType("integer");
-
-                    b.Property<Guid>("TrackId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("TrackId");
-
-                    b.HasIndex("UserId", "TrackId")
-                        .IsUnique();
-
-                    b.ToTable("FullDictationSessions");
-                });
-
-            modelBuilder.Entity("Lychee.Data.Entities.PracticeRecord", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<double>("AccuracyScore")
-                        .HasColumnType("double precision");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("DiffDetail")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<bool>("IsCorrect")
-                        .HasColumnType("boolean");
-
-                    b.Property<Guid>("SentenceId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("SubmittedText")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("SentenceId");
-
-                    b.HasIndex("UserId");
-
-                    b.ToTable("PracticeRecords");
                 });
 
             modelBuilder.Entity("Lychee.Data.Entities.PracticeSession", b =>
@@ -259,6 +190,9 @@ namespace Lychee.Data.Migrations
                     b.Property<int>("CurrentSentenceIndex")
                         .HasColumnType("integer");
 
+                    b.Property<int>("Mode")
+                        .HasColumnType("integer");
+
                     b.Property<int>("Status")
                         .HasColumnType("integer");
 
@@ -275,7 +209,7 @@ namespace Lychee.Data.Migrations
 
                     b.HasIndex("TrackId");
 
-                    b.HasIndex("UserId", "TrackId")
+                    b.HasIndex("UserId", "TrackId", "Mode")
                         .IsUnique();
 
                     b.ToTable("PracticeSessions");
@@ -638,7 +572,7 @@ namespace Lychee.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("Lychee.Data.Entities.FullDictationSession", "Session")
+                    b.HasOne("Lychee.Data.Entities.PracticeSession", "Session")
                         .WithMany()
                         .HasForeignKey("SessionId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -647,44 +581,6 @@ namespace Lychee.Data.Migrations
                     b.Navigation("Sentence");
 
                     b.Navigation("Session");
-                });
-
-            modelBuilder.Entity("Lychee.Data.Entities.FullDictationSession", b =>
-                {
-                    b.HasOne("Lychee.Data.Entities.Track", "Track")
-                        .WithMany()
-                        .HasForeignKey("TrackId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("Lychee.Data.Entities.ApplicationUser", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Track");
-
-                    b.Navigation("User");
-                });
-
-            modelBuilder.Entity("Lychee.Data.Entities.PracticeRecord", b =>
-                {
-                    b.HasOne("Lychee.Data.Entities.Sentence", "Sentence")
-                        .WithMany()
-                        .HasForeignKey("SentenceId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("Lychee.Data.Entities.ApplicationUser", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Sentence");
-
-                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("Lychee.Data.Entities.PracticeSession", b =>

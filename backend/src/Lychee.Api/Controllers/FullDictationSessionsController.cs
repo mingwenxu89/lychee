@@ -7,11 +7,13 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Lychee.Api.Controllers;
 
+// SubmittedTexts (sentence id -> what the learner typed for it, as of the most recent submit)
+// lets a resumed session pre-fill an upcoming sentence with what was typed for it last round,
+// not just which sentence ids were correct.
 public record FullDictationSessionResponse(
-    Guid Id, Guid TrackId, string Status, int CurrentRound, string CurrentPhase,
-    List<Guid> CorrectSentenceIds, DateTime? CompletedAt);
-public record CheckpointRequest(int CurrentRound, string CurrentPhase, List<Guid> NewlyCorrectSentenceIds);
-public record CompleteRequest(List<Guid> NewlyCorrectSentenceIds);
+    Guid Id, Guid TrackId, string Status, int CurrentSentenceIndex,
+    List<Guid> CorrectSentenceIds, Dictionary<Guid, string> SubmittedTexts, DateTime? CompletedAt);
+public record FullDictationSubmitRequest(Guid SentenceId, bool IsCorrect, string SubmittedText);
 public record CompleteResponse(double Score, List<Guid> FinalCorrectSentenceIds);
 
 [ApiController]
@@ -22,13 +24,14 @@ public class FullDictationSessionsController : ControllerBase
 
     public FullDictationSessionsController(LycheeDbContext db) => _db = db;
 
-    private async Task<FullDictationSessionResponse> ToResponseAsync(FullDictationSession s)
+    private async Task<FullDictationSessionResponse> ToResponseAsync(PracticeSession s)
     {
-        var correctIds = await _db.FullDictationSentenceResults
-            .Where(r => r.SessionId == s.Id && r.IsCorrect)
-            .Select(r => r.SentenceId)
+        var results = await _db.FullDictationSentenceResults
+            .Where(r => r.SessionId == s.Id)
             .ToListAsync();
-        return new(s.Id, s.TrackId, s.Status.ToString(), s.CurrentRound, s.CurrentPhase.ToString(), correctIds, s.CompletedAt);
+        var correctIds = results.Where(r => r.IsCorrect).Select(r => r.SentenceId).ToList();
+        var submittedTexts = results.ToDictionary(r => r.SentenceId, r => r.SubmittedText);
+        return new(s.Id, s.TrackId, s.Status.ToString(), s.CurrentSentenceIndex, correctIds, submittedTexts, s.CompletedAt);
     }
 
     [HttpPost("api/learner/tracks/{trackId}/full-dictation-session/start")]
@@ -38,22 +41,22 @@ public class FullDictationSessionsController : ControllerBase
         if (!trackExists) return NotFound();
 
         var userId = User.GetUserId();
-        var session = await _db.FullDictationSessions
-            .FirstOrDefaultAsync(s => s.UserId == userId && s.TrackId == trackId);
+        var session = await _db.PracticeSessions
+            .FirstOrDefaultAsync(s => s.UserId == userId && s.TrackId == trackId && s.Mode == PracticeMode.FullDictation);
 
         if (session is null)
         {
-            session = new FullDictationSession
+            session = new PracticeSession
             {
                 Id = Guid.NewGuid(),
                 UserId = userId,
                 TrackId = trackId,
-                Status = FullDictationSessionStatus.InProgress,
-                CurrentRound = 1,
-                CurrentPhase = FullDictationPhase.Blind,
+                Mode = PracticeMode.FullDictation,
+                Status = PracticeSessionStatus.InProgress,
+                CurrentSentenceIndex = 0,
                 UpdatedAt = DateTime.UtcNow
             };
-            _db.FullDictationSessions.Add(session);
+            _db.PracticeSessions.Add(session);
 
             try
             {
@@ -61,27 +64,26 @@ public class FullDictationSessionsController : ControllerBase
             }
             catch (DbUpdateException)
             {
-                // Another concurrent request for this (user, track) won the insert race against
-                // the unique (UserId, TrackId) index — return the session it just created instead
-                // of erroring, mirroring PracticeSessionsController.Start.
+                // Another concurrent request for this (user, track, mode) won the insert race
+                // against the unique index — return the session it just created instead of
+                // erroring, mirroring PracticeSessionsController.Start.
                 _db.Entry(session).State = EntityState.Detached;
-                session = await _db.FullDictationSessions
-                    .FirstAsync(s => s.UserId == userId && s.TrackId == trackId);
+                session = await _db.PracticeSessions
+                    .FirstAsync(s => s.UserId == userId && s.TrackId == trackId && s.Mode == PracticeMode.FullDictation);
             }
 
             return Ok(await ToResponseAsync(session));
         }
 
-        if (session.Status == FullDictationSessionStatus.Completed)
+        if (session.Status == PracticeSessionStatus.Completed)
         {
             var oldResults = await _db.FullDictationSentenceResults
                 .Where(r => r.SessionId == session.Id)
                 .ToListAsync();
             _db.FullDictationSentenceResults.RemoveRange(oldResults);
 
-            session.Status = FullDictationSessionStatus.InProgress;
-            session.CurrentRound = 1;
-            session.CurrentPhase = FullDictationPhase.Blind;
+            session.Status = PracticeSessionStatus.InProgress;
+            session.CurrentSentenceIndex = 0;
             session.CompletedAt = null;
             session.UpdatedAt = DateTime.UtcNow;
             await _db.SaveChangesAsync();
@@ -90,37 +92,78 @@ public class FullDictationSessionsController : ControllerBase
         return Ok(await ToResponseAsync(session));
     }
 
-    [HttpPost("api/learner/full-dictation-sessions/{sessionId}/checkpoint")]
-    public async Task<IActionResult> Checkpoint(Guid sessionId, CheckpointRequest request)
+    // Called once per sentence, immediately after the learner submits it (correct or not) —
+    // unlike the old round-batched checkpoint, this lands right away so a mid-round close and
+    // resume never loses progress within the round that was interrupted.
+    [HttpPost("api/learner/full-dictation-sessions/{sessionId}/submit")]
+    public async Task<IActionResult> Submit(Guid sessionId, FullDictationSubmitRequest request)
     {
         var userId = User.GetUserId();
-        var session = await _db.FullDictationSessions.FirstOrDefaultAsync(s => s.Id == sessionId && s.UserId == userId);
+        var session = await _db.PracticeSessions
+            .FirstOrDefaultAsync(s => s.Id == sessionId && s.UserId == userId && s.Mode == PracticeMode.FullDictation);
         if (session is null) return NotFound();
 
-        if (!Enum.TryParse<FullDictationPhase>(request.CurrentPhase, out var currentPhase))
-            return BadRequest($"Unrecognized phase '{request.CurrentPhase}'.");
+        var sentence = await _db.Sentences.FirstOrDefaultAsync(s => s.Id == request.SentenceId && s.TrackId == session.TrackId);
+        if (sentence is null) return NotFound();
 
-        await UpsertCorrectResultsAsync(session, request.NewlyCorrectSentenceIds);
+        var existing = await _db.FullDictationSentenceResults
+            .FirstOrDefaultAsync(r => r.SessionId == session.Id && r.SentenceId == request.SentenceId);
+        if (existing is null)
+        {
+            _db.FullDictationSentenceResults.Add(new FullDictationSentenceResult
+            {
+                Id = Guid.NewGuid(),
+                SessionId = session.Id,
+                SentenceId = request.SentenceId,
+                IsCorrect = request.IsCorrect,
+                SubmittedText = request.SubmittedText
+            });
+        }
+        else
+        {
+            existing.IsCorrect = request.IsCorrect;
+            existing.SubmittedText = request.SubmittedText;
+        }
 
-        session.CurrentRound = request.CurrentRound;
-        session.CurrentPhase = currentPhase;
         session.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
 
         return NoContent();
     }
 
-    [HttpPost("api/learner/full-dictation-sessions/{sessionId}/complete")]
-    public async Task<IActionResult> Complete(Guid sessionId, CompleteRequest request)
+    // Pure position bookkeeping — the learner's own client tracks the current round's queue
+    // (whichever sentences aren't correct yet) and decides when a round ends; this just persists
+    // wherever they are so a resume lands on the same sentence, matching Sentence Dictation's
+    // CurrentSentenceIndex. Passing 0 signals "starting a fresh round from its first sentence".
+    [HttpPost("api/learner/full-dictation-sessions/{sessionId}/advance")]
+    public async Task<IActionResult> Advance(Guid sessionId, AdvanceSessionRequest request)
     {
         var userId = User.GetUserId();
-        var session = await _db.FullDictationSessions.FirstOrDefaultAsync(s => s.Id == sessionId && s.UserId == userId);
+        var session = await _db.PracticeSessions
+            .FirstOrDefaultAsync(s => s.Id == sessionId && s.UserId == userId && s.Mode == PracticeMode.FullDictation);
         if (session is null) return NotFound();
 
-        await UpsertCorrectResultsAsync(session, request.NewlyCorrectSentenceIds);
+        session.CurrentSentenceIndex = request.ToIndex;
+        session.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
 
-        session.Status = FullDictationSessionStatus.Completed;
+        return NoContent();
+    }
+
+    // Ends the session — either every sentence is finally correct, or the learner chose to stop
+    // early ("Finish Now") with whatever's correct so far. Every sentence's correctness was
+    // already persisted by Submit, so there's nothing left to record here beyond the final tally.
+    [HttpPost("api/learner/full-dictation-sessions/{sessionId}/complete")]
+    public async Task<IActionResult> Complete(Guid sessionId)
+    {
+        var userId = User.GetUserId();
+        var session = await _db.PracticeSessions
+            .FirstOrDefaultAsync(s => s.Id == sessionId && s.UserId == userId && s.Mode == PracticeMode.FullDictation);
+        if (session is null) return NotFound();
+
+        session.Status = PracticeSessionStatus.Completed;
         session.CompletedAt = DateTime.UtcNow;
+        session.CurrentSentenceIndex = 0;
         session.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
 
@@ -132,42 +175,5 @@ public class FullDictationSessionsController : ControllerBase
         var score = totalSentences == 0 ? 0.0 : (double)finalCorrectIds.Count / totalSentences;
 
         return Ok(new CompleteResponse(score, finalCorrectIds));
-    }
-
-    private async Task UpsertCorrectResultsAsync(FullDictationSession session, List<Guid> newlyCorrectSentenceIds)
-    {
-        if (newlyCorrectSentenceIds.Count == 0) return;
-
-        // Constrain to sentence ids that actually belong to this session's track — a client
-        // could otherwise submit ids from an unrelated track, inflating its score and creating
-        // FullDictationSentenceResult rows that point outside the track. Grading itself is
-        // client-side by design, so this is a data-integrity guard, not a security boundary.
-        var validSentenceIds = await _db.Sentences
-            .Where(s => s.TrackId == session.TrackId && newlyCorrectSentenceIds.Contains(s.Id))
-            .Select(s => s.Id)
-            .ToListAsync();
-
-        if (validSentenceIds.Count == 0) return;
-
-        var existing = await _db.FullDictationSentenceResults
-            .Where(r => r.SessionId == session.Id && validSentenceIds.Contains(r.SentenceId))
-            .ToListAsync();
-        var existingSentenceIds = existing.Select(r => r.SentenceId).ToHashSet();
-
-        foreach (var result in existing)
-        {
-            result.IsCorrect = true;
-        }
-
-        foreach (var sentenceId in validSentenceIds.Distinct().Where(id => !existingSentenceIds.Contains(id)))
-        {
-            _db.FullDictationSentenceResults.Add(new FullDictationSentenceResult
-            {
-                Id = Guid.NewGuid(),
-                SessionId = session.Id,
-                SentenceId = sentenceId,
-                IsCorrect = true
-            });
-        }
     }
 }

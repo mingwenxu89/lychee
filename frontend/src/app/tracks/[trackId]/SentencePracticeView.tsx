@@ -1,16 +1,16 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { preloadAudio } from '@/lib/audioPreload'
 import { parseTimeSpanToSeconds } from '@/lib/timeSpan'
 import { isSpeechRecognitionSupported, createContinuousRecognizer } from '@/lib/speechRecognition'
 import { compare } from '@/lib/textComparer'
 import { DiffText, type WordDiff } from '@/components/DiffText'
+import { SentenceProgressGrid } from './SentenceProgressGrid'
 import type { LearnerTrack } from './page'
 
 type PracticeSession = { id: string; trackId: string; currentSentenceIndex: number; status: 'InProgress' | 'Completed'; completedAt: string | null }
 type SubmitResult = { accuracyScore: number; isCorrect: boolean; words: WordDiff[] }
-type AdvanceResult = { currentSentenceIndex: number; isCompleted: boolean; overallAccuracy: number | null }
+type AdvanceResult = { currentSentenceIndex: number; isCompleted: boolean }
 
 const cardStyle: React.CSSProperties = {
   background: 'var(--surface)',
@@ -116,12 +116,17 @@ function formatTime(seconds: number): string {
 
 export function SentencePracticeView({
   track,
-  onCompleted
+  audioObjectUrl,
+  audioError,
+  onCompleted,
+  onBack
 }: {
   track: LearnerTrack
-  onCompleted: (accuracyScore: number) => void
+  audioObjectUrl: string | null
+  audioError: string | null
+  onCompleted: () => void
+  onBack: () => void
 }) {
-  const [audioObjectUrl, setAudioObjectUrl] = useState<string | null>(null)
   const [session, setSession] = useState<PracticeSession | null>(null)
   const [answer, setAnswer] = useState('')
   const [result, setResult] = useState<SubmitResult | null>(null)
@@ -143,15 +148,13 @@ export function SentencePracticeView({
   const autoplayOnChangeRef = useRef(false)
 
   useEffect(() => {
-    async function init() {
-      try {
-        const objectUrl = await preloadAudio(track.audioUrl)
-        setAudioObjectUrl(objectUrl)
-      } catch {
-        setError('Failed to download audio for this track.')
-        return
-      }
+    if (audioError) {
+      setError(audioError)
+      return
+    }
+    if (audioObjectUrl === null) return // still downloading, at the page level
 
+    async function init() {
       const startResponse = await fetch(`/api/learner/tracks/${track.id}/practice-session/start`, { method: 'POST' })
       if (!startResponse.ok) {
         setError('Failed to start practice session.')
@@ -165,7 +168,7 @@ export function SentencePracticeView({
       setSession(startedSession)
     }
     init()
-  }, [track.id, track.audioUrl])
+  }, [track.id, audioObjectUrl, audioError])
 
   const currentSentence = session ? track.sentences[session.currentSentenceIndex] : null
   const sentenceStart = currentSentence ? parseTimeSpanToSeconds(currentSentence.startTime) : 0
@@ -253,14 +256,15 @@ export function SentencePracticeView({
 
     setCompletedIndices((prev) => new Set(prev).add(session.currentSentenceIndex))
 
-    // Only a correct answer is ever sent to the backend to record — a wrong attempt never
-    // leaves the browser, and skipping (handleAdvance) has never recorded one either.
-    const submittedText = answer
+    // Only a correct answer is ever sent to the backend at all — a wrong attempt never leaves
+    // the browser, and skipping (handleAdvance) has never recorded one either. The call just
+    // marks the sentence practiced today (for the activity-streak feature); nothing about this
+    // specific submission is kept, so there's nothing else to send.
     setAnswer(currentSentence.text)
     fetch(`/api/learner/practice-sessions/${session.id}/submit`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sentenceId: currentSentence.id, submittedText })
+      body: JSON.stringify({ sentenceId: currentSentence.id })
     }).then((response) => {
       if (!response.ok) setActionError('Failed to save your progress. Please try again.')
     })
@@ -283,7 +287,7 @@ export function SentencePracticeView({
     setResult(null)
     if (advanced.isCompleted) {
       autoplayOnChangeRef.current = false
-      onCompleted(advanced.overallAccuracy ?? 0)
+      onCompleted()
     } else {
       setSession({ ...session, currentSentenceIndex: advanced.currentSentenceIndex })
     }
@@ -427,28 +431,17 @@ export function SentencePracticeView({
         <div style={{ ...cardStyle, padding: 26, display: 'flex', flexDirection: 'column', gap: 24 }}>
           <audio ref={audioRef} src={audioObjectUrl ?? undefined} />
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 28 }}>
+            <button
+              onClick={onBack}
+              style={{ background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, color: 'var(--ink-soft)', fontWeight: 800, fontSize: 15, flexShrink: 0 }}
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--ink-soft)" strokeWidth="2.5"><path d="M15 6l-6 6 6 6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              Back
+            </button>
             <span style={{ ...chipStyle, background: 'var(--primary-soft)', color: 'var(--ink-soft)' }}>
               Sentence {sentenceNumber} / {totalSentences}
             </span>
-            <button
-              onClick={handleToggleSentenceFavorite}
-              disabled={!currentSentence}
-              aria-label={currentSentence && favoritedSentenceIds.has(currentSentence.id) ? 'Remove sentence from favorites' : 'Add sentence to favorites'}
-              aria-pressed={currentSentence ? favoritedSentenceIds.has(currentSentence.id) : false}
-              style={{ background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', flexShrink: 0 }}
-            >
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill={currentSentence && favoritedSentenceIds.has(currentSentence.id) ? 'var(--primary)' : 'none'}
-                stroke={currentSentence && favoritedSentenceIds.has(currentSentence.id) ? 'var(--primary)' : 'var(--ink-faint)'}
-                strokeWidth="2"
-              >
-                <path d="M12 21s-6.7-4.35-9.3-8.28C1.02 10.4 1.5 6.9 4.3 5.3a5 5 0 0 1 7 1.2 5 5 0 0 1 7-1.2c2.8 1.6 3.28 5.1 1.6 7.42C18.7 16.65 12 21 12 21z" strokeLinejoin="round" />
-              </svg>
-            </button>
             <div style={{ flex: 1, height: 10, background: 'var(--line)', borderRadius: 999, overflow: 'hidden' }}>
               <div
                 style={{
@@ -580,7 +573,6 @@ export function SentencePracticeView({
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <textarea
               ref={textareaRef}
-              className="dictation-answer"
               rows={3}
               value={answer}
               onChange={(e) => setAnswer(e.target.value)}
@@ -627,6 +619,24 @@ export function SentencePracticeView({
                 )}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <button
+                  onClick={handleToggleSentenceFavorite}
+                  disabled={!currentSentence}
+                  aria-label={currentSentence && favoritedSentenceIds.has(currentSentence.id) ? 'Remove sentence from favorites' : 'Add sentence to favorites'}
+                  aria-pressed={currentSentence ? favoritedSentenceIds.has(currentSentence.id) : false}
+                  style={{ background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', flexShrink: 0 }}
+                >
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill={currentSentence && favoritedSentenceIds.has(currentSentence.id) ? 'var(--primary)' : 'none'}
+                    stroke={currentSentence && favoritedSentenceIds.has(currentSentence.id) ? 'var(--primary)' : 'var(--ink-faint)'}
+                    strokeWidth="2"
+                  >
+                    <path d="M12 21s-6.7-4.35-9.3-8.28C1.02 10.4 1.5 6.9 4.3 5.3a5 5 0 0 1 7 1.2 5 5 0 0 1 7-1.2c2.8 1.6 3.28 5.1 1.6 7.42C18.7 16.65 12 21 12 21z" strokeLinejoin="round" />
+                  </svg>
+                </button>
                 <button
                   onClick={handleTryAgain}
                   aria-label="Reset"
@@ -737,47 +747,16 @@ export function SentencePracticeView({
         </div>
       </div>
 
-      <div style={{ width: 240, display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <div style={{ ...cardStyle, padding: 18, display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <span style={{ fontWeight: 800, fontSize: 14, color: 'var(--ink-soft)' }}>Progress</span>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
-            {track.sentences.map((s, i) => {
-              const isDone = completedIndices.has(i)
-              const isCurrent = session !== null && i === session.currentSentenceIndex
-              const digitCount = String(i + 1).length
-              return (
-                <button
-                  key={s.id}
-                  onClick={() => handleAdvance(i)}
-                  disabled={!isReady}
-                  style={{
-                    width: 28,
-                    height: 28,
-                    borderRadius: 999,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    padding: 0,
-                    cursor: isReady ? 'pointer' : 'default',
-                    fontWeight: 800,
-                    fontSize: digitCount >= 3 ? 9 : 12,
-                    background: isDone ? 'var(--leaf)' : isCurrent ? 'var(--surface)' : 'transparent',
-                    border: isCurrent ? '3px solid var(--primary)' : isDone ? 'none' : '2px solid var(--line)',
-                    color: isCurrent ? 'var(--primary)' : isDone ? 'white' : 'var(--ink-soft)'
-                  }}
-                >
-                  {isDone ? (
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><path d="M20 6L9 17l-5-5" /></svg>
-                  ) : (
-                    i + 1
-                  )}
-                </button>
-              )
-            })}
-          </div>
-          <span style={{ fontSize: 12, color: 'var(--ink-faint)', fontWeight: 600 }}>Tap any sentence to jump straight to it</span>
-        </div>
-      </div>
+      <SentenceProgressGrid
+        count={track.sentences.length}
+        disabled={!isReady}
+        onJump={handleAdvance}
+        getStatus={(i) => {
+          if (session !== null && i === session.currentSentenceIndex) return 'current'
+          if (completedIndices.has(i)) return 'correct'
+          return 'untouched'
+        }}
+      />
 
       {showShortcuts && (
         <div style={overlayStyle} onClick={() => setShowShortcuts(false)}>

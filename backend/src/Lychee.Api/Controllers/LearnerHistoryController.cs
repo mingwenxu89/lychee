@@ -1,5 +1,4 @@
 using Lychee.Api.Auth;
-using Lychee.Api.Content;
 using Lychee.Data;
 using Lychee.Data.Entities;
 using Microsoft.AspNetCore.Authorization;
@@ -39,27 +38,14 @@ public class LearnerHistoryController : ControllerBase
             .Include(a => a.Track).ThenInclude(t => t.Unit).ThenInclude(u => u.Exercise)
             .ToListAsync();
 
-        var allRecords = await _db.PracticeRecords
-            .Where(r => r.UserId == userId)
-            .Select(r => new { r.SentenceId, r.AccuracyScore, r.CreatedAt, TrackId = r.Sentence.TrackId })
-            .ToListAsync();
-
         var entries = new List<HistoryEntryResponse>();
 
         foreach (var session in sessions)
         {
-            double? accuracy = null;
-            if (session.Status == PracticeSessionStatus.Completed)
-            {
-                var recordsForTrack = allRecords
-                    .Where(r => r.TrackId == session.TrackId)
-                    .Select(r => (r.SentenceId, r.AccuracyScore, r.CreatedAt));
-                accuracy = TrackAccuracyCalculator.ComputeOverallAccuracy(recordsForTrack);
-            }
-
+            // Sentence Dictation has no completion score — see PracticeSessionsController.Advance.
             entries.Add(new HistoryEntryResponse(
                 session.TrackId, session.Track.Title, session.Track.Unit.Exercise.Title, "Practice",
-                session.Status.ToString(), accuracy,
+                session.Status.ToString(), null,
                 session.Status == PracticeSessionStatus.Completed ? null : session.CurrentSentenceIndex,
                 session.Status == PracticeSessionStatus.Completed ? null : session.Track.Sentences.Count,
                 session.UpdatedAt));

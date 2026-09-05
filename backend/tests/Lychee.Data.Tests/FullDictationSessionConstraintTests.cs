@@ -63,28 +63,55 @@ public class FullDictationSessionConstraintTests
     }
 
     [Fact]
-    public async Task FullDictationSession_DuplicateUserTrack_ThrowsOnSecondInsert()
+    public async Task PracticeSession_DuplicateUserTrackMode_ThrowsOnSecondInsert()
     {
         await using var context = CreateContext();
         var (user, sentence) = await SeedUserAndSentenceAsync(context);
         var trackId = sentence.TrackId;
 
-        context.FullDictationSessions.Add(new FullDictationSession
+        context.PracticeSessions.Add(new PracticeSession
         {
-            Id = Guid.NewGuid(), UserId = user.Id, TrackId = trackId,
-            Status = FullDictationSessionStatus.InProgress, CurrentRound = 1,
-            CurrentPhase = FullDictationPhase.Blind, UpdatedAt = DateTime.UtcNow
+            Id = Guid.NewGuid(), UserId = user.Id, TrackId = trackId, Mode = PracticeMode.FullDictation,
+            Status = PracticeSessionStatus.InProgress, CurrentSentenceIndex = 0,
+            UpdatedAt = DateTime.UtcNow
         });
         await context.SaveChangesAsync();
 
-        context.FullDictationSessions.Add(new FullDictationSession
+        context.PracticeSessions.Add(new PracticeSession
         {
-            Id = Guid.NewGuid(), UserId = user.Id, TrackId = trackId,
-            Status = FullDictationSessionStatus.InProgress, CurrentRound = 1,
-            CurrentPhase = FullDictationPhase.Blind, UpdatedAt = DateTime.UtcNow
+            Id = Guid.NewGuid(), UserId = user.Id, TrackId = trackId, Mode = PracticeMode.FullDictation,
+            Status = PracticeSessionStatus.InProgress, CurrentSentenceIndex = 0,
+            UpdatedAt = DateTime.UtcNow
         });
 
         await Assert.ThrowsAsync<DbUpdateException>(() => context.SaveChangesAsync());
+    }
+
+    [Fact]
+    public async Task PracticeSession_SameUserTrackDifferentMode_DoesNotCollide()
+    {
+        // The whole point of scoping the unique index by Mode too: a learner can be mid-way
+        // through Sentence Dictation and Full Dictation for the same track at the same time.
+        await using var context = CreateContext();
+        var (user, sentence) = await SeedUserAndSentenceAsync(context);
+        var trackId = sentence.TrackId;
+
+        context.PracticeSessions.Add(new PracticeSession
+        {
+            Id = Guid.NewGuid(), UserId = user.Id, TrackId = trackId, Mode = PracticeMode.Sentence,
+            Status = PracticeSessionStatus.InProgress, CurrentSentenceIndex = 0,
+            UpdatedAt = DateTime.UtcNow
+        });
+        context.PracticeSessions.Add(new PracticeSession
+        {
+            Id = Guid.NewGuid(), UserId = user.Id, TrackId = trackId, Mode = PracticeMode.FullDictation,
+            Status = PracticeSessionStatus.InProgress, CurrentSentenceIndex = 0,
+            UpdatedAt = DateTime.UtcNow
+        });
+
+        await context.SaveChangesAsync();
+
+        Assert.Equal(2, await context.PracticeSessions.CountAsync(s => s.UserId == user.Id && s.TrackId == trackId));
     }
 
     [Fact]
@@ -92,13 +119,13 @@ public class FullDictationSessionConstraintTests
     {
         await using var context = CreateContext();
         var (user, sentence) = await SeedUserAndSentenceAsync(context);
-        var session = new FullDictationSession
+        var session = new PracticeSession
         {
-            Id = Guid.NewGuid(), UserId = user.Id, TrackId = sentence.TrackId,
-            Status = FullDictationSessionStatus.InProgress, CurrentRound = 1,
-            CurrentPhase = FullDictationPhase.Blind, UpdatedAt = DateTime.UtcNow
+            Id = Guid.NewGuid(), UserId = user.Id, TrackId = sentence.TrackId, Mode = PracticeMode.FullDictation,
+            Status = PracticeSessionStatus.InProgress, CurrentSentenceIndex = 0,
+            UpdatedAt = DateTime.UtcNow
         };
-        context.FullDictationSessions.Add(session);
+        context.PracticeSessions.Add(session);
         await context.SaveChangesAsync();
 
         context.FullDictationSentenceResults.Add(new FullDictationSentenceResult

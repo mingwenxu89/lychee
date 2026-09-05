@@ -16,9 +16,7 @@ public class LycheeDbContext : IdentityDbContext<ApplicationUser, IdentityRole<G
     public DbSet<SentenceFavorite> SentenceFavorites => Set<SentenceFavorite>();
     public DbSet<TrackFavorite> TrackFavorites => Set<TrackFavorite>();
     public DbSet<PracticeSession> PracticeSessions => Set<PracticeSession>();
-    public DbSet<PracticeRecord> PracticeRecords => Set<PracticeRecord>();
     public DbSet<RecitationAttempt> RecitationAttempts => Set<RecitationAttempt>();
-    public DbSet<FullDictationSession> FullDictationSessions => Set<FullDictationSession>();
     public DbSet<FullDictationSentenceResult> FullDictationSentenceResults => Set<FullDictationSentenceResult>();
     public DbSet<DailyPracticeLog> DailyPracticeLogs => Set<DailyPracticeLog>();
     public DbSet<Quote> Quotes => Set<Quote>();
@@ -53,19 +51,22 @@ public class LycheeDbContext : IdentityDbContext<ApplicationUser, IdentityRole<G
         modelBuilder.Entity<SentenceFavorite>().HasKey(f => new { f.UserId, f.SentenceId });
         modelBuilder.Entity<TrackFavorite>().HasKey(f => new { f.UserId, f.TrackId });
 
+        // A learner can have one InProgress-or-Completed row per (UserId, TrackId, Mode) — a
+        // Sentence Dictation session and a Full Dictation session for the same track are
+        // independent and can both be in progress at once.
         modelBuilder.Entity<PracticeSession>()
-            .HasIndex(s => new { s.UserId, s.TrackId })
-            .IsUnique();
-
-        modelBuilder.Entity<FullDictationSession>()
-            .HasIndex(s => new { s.UserId, s.TrackId })
+            .HasIndex(s => new { s.UserId, s.TrackId, s.Mode })
             .IsUnique();
 
         modelBuilder.Entity<FullDictationSentenceResult>()
             .HasIndex(r => new { r.SessionId, r.SentenceId })
             .IsUnique();
 
-        modelBuilder.Entity<FullDictationSession>()
+        modelBuilder.Entity<FullDictationSentenceResult>()
+            .Property(r => r.SubmittedText)
+            .HasDefaultValue("");
+
+        modelBuilder.Entity<PracticeSession>()
             .HasMany<FullDictationSentenceResult>()
             .WithOne(r => r.Session)
             .HasForeignKey(r => r.SessionId)

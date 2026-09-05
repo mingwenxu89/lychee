@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { parseTimeSpanToSeconds } from '@/lib/timeSpan'
 import type { LearnerTrack } from './page'
-import { RecitationPanel } from './RecitationPanel'
 
 const cardStyle: React.CSSProperties = {
   background: 'var(--surface)',
@@ -36,20 +35,21 @@ function formatTime(seconds: number): string {
 export function FullTextView({
   track,
   initialSentenceIndex,
-  onRecitationCompleted,
-  onStartFullDictation
+  onStartFullDictation,
+  onStartBySentence,
+  onStartRecite
 }: {
   track: LearnerTrack
   initialSentenceIndex?: number | null
-  onRecitationCompleted: (accuracyScore: number) => void
   onStartFullDictation: () => void
+  onStartBySentence: () => void
+  onStartRecite: () => void
 }) {
   const audioRef = useRef<HTMLAudioElement>(null)
   const sentenceRefs = useRef<(HTMLLIElement | null)[]>([])
   const [showText, setShowText] = useState(false)
   const [speed, setSpeed] = useState('1')
   const [activeIndex, setActiveIndex] = useState(0)
-  const [showRecitation, setShowRecitation] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
   const [isPlaying, setIsPlaying] = useState(false)
@@ -58,7 +58,7 @@ export function FullTextView({
   )
 
   useEffect(() => {
-    if (showText) sentenceRefs.current[activeIndex]?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    if (showText) sentenceRefs.current[activeIndex]?.scrollIntoView({ block: 'center', behavior: 'smooth' })
   }, [activeIndex, showText])
 
   // Arriving from a favorited-sentence link: jump the audio to that sentence's position and
@@ -221,11 +221,14 @@ export function FullTextView({
             <option value="1.25">1.25x</option>
             <option value="1.5">1.5x</option>
           </select>
-          <button onClick={() => setShowRecitation(true)} style={btnPrimary}>
-            Recite
-          </button>
           <button onClick={onStartFullDictation} style={btnPrimary}>
-            Start Full Dictation
+            Full Dictation
+          </button>
+          <button onClick={onStartBySentence} style={btnPrimary}>
+            Sentence Dictation
+          </button>
+          <button onClick={onStartRecite} style={btnPrimary}>
+            Recite
           </button>
         </div>
       </div>
@@ -276,7 +279,11 @@ export function FullTextView({
                     background: isActive ? 'var(--primary-soft)' : 'transparent'
                   }}
                 >
-                  <span style={{ fontWeight: 800, fontSize: 13, width: 22, flexShrink: 0, paddingTop: 2, color: isActive ? 'var(--ink)' : 'var(--ink-faint)' }}>
+                  {/* lineHeight is set in px, matching the sentence text's own line-box height
+                      (17px * 1.6) exactly, rather than a ratio — the number is smaller (13px) but
+                      needs the same line-box height to vertically center against the text's
+                      first line instead of drifting toward the top of a multi-line sentence. */}
+                  <span style={{ fontWeight: 800, fontSize: 13, lineHeight: '27.2px', width: 22, flexShrink: 0, color: isActive ? 'var(--ink)' : 'var(--ink-faint)' }}>
                     {i + 1}
                   </span>
                   <span
@@ -339,15 +346,6 @@ export function FullTextView({
           <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 60, background: 'linear-gradient(to bottom, transparent, var(--surface))', pointerEvents: 'none' }} />
         )}
       </div>
-
-      {showRecitation && (
-        <RecitationPanel
-          trackId={track.id}
-          sentences={track.sentences}
-          onCompleted={onRecitationCompleted}
-          onClose={() => setShowRecitation(false)}
-        />
-      )}
     </div>
   )
 }

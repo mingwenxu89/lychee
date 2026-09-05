@@ -10,9 +10,9 @@ namespace Lychee.Api.Controllers;
 
 public record PracticeSessionResponse(Guid Id, Guid TrackId, int CurrentSentenceIndex, string Status, DateTime? CompletedAt);
 public record WordDiffResponse(string Word, string Status);
-public record SubmitAnswerRequest(Guid SentenceId, string SubmittedText);
+public record SubmitAnswerRequest(Guid SentenceId);
 public record AdvanceSessionRequest(int ToIndex);
-public record AdvanceSessionResponse(int CurrentSentenceIndex, bool IsCompleted, double? OverallAccuracy);
+public record AdvanceSessionResponse(int CurrentSentenceIndex, bool IsCompleted);
 
 [ApiController]
 [Authorize]
@@ -33,7 +33,7 @@ public class PracticeSessionsController : ControllerBase
 
         var userId = User.GetUserId();
         var session = await _db.PracticeSessions
-            .FirstOrDefaultAsync(s => s.UserId == userId && s.TrackId == trackId);
+            .FirstOrDefaultAsync(s => s.UserId == userId && s.TrackId == trackId && s.Mode == PracticeMode.Sentence);
 
         if (session is null)
         {
@@ -42,6 +42,7 @@ public class PracticeSessionsController : ControllerBase
                 Id = Guid.NewGuid(),
                 UserId = userId,
                 TrackId = trackId,
+                Mode = PracticeMode.Sentence,
                 Status = PracticeSessionStatus.InProgress,
                 CurrentSentenceIndex = 0,
                 UpdatedAt = DateTime.UtcNow
@@ -54,13 +55,13 @@ public class PracticeSessionsController : ControllerBase
             }
             catch (DbUpdateException)
             {
-                // Another concurrent request for this (user, track) won the insert race against
-                // the unique (UserId, TrackId) index — return the session it just created instead
-                // of erroring. React StrictMode's double-invoked effects trigger this reliably in
+                // Another concurrent request for this (user, track, mode) won the insert race
+                // against the unique index — return the session it just created instead of
+                // erroring. React StrictMode's double-invoked effects trigger this reliably in
                 // dev; genuine concurrent requests (double-click, multiple tabs) can too.
                 _db.Entry(session).State = EntityState.Detached;
                 session = await _db.PracticeSessions
-                    .FirstAsync(s => s.UserId == userId && s.TrackId == trackId);
+                    .FirstAsync(s => s.UserId == userId && s.TrackId == trackId && s.Mode == PracticeMode.Sentence);
             }
 
             return Ok(ToResponse(session));
@@ -78,30 +79,19 @@ public class PracticeSessionsController : ControllerBase
         return Ok(ToResponse(session));
     }
 
-    // The frontend now computes correctness itself (see frontend/src/lib/textComparer.ts) and
-    // only ever calls this endpoint to record a correct answer — a wrong attempt never reaches
-    // the backend at all, so every PracticeRecord created here is, by construction, a match.
+    // The frontend computes correctness itself (see frontend/src/lib/textComparer.ts) and only
+    // ever calls this endpoint for a correct answer — a wrong attempt never reaches the backend
+    // at all. The only lasting effect is the DailyPracticeLog entry below, for the activity-streak
+    // feature; nothing about this specific submission (its text, or that it happened) is kept.
     [HttpPost("api/learner/practice-sessions/{sessionId}/submit")]
     public async Task<IActionResult> Submit(Guid sessionId, SubmitAnswerRequest request)
     {
         var userId = User.GetUserId();
-        var session = await _db.PracticeSessions.FirstOrDefaultAsync(s => s.Id == sessionId && s.UserId == userId);
+        var session = await _db.PracticeSessions.FirstOrDefaultAsync(s => s.Id == sessionId && s.UserId == userId && s.Mode == PracticeMode.Sentence);
         if (session is null) return NotFound();
 
         var sentence = await _db.Sentences.FirstOrDefaultAsync(s => s.Id == request.SentenceId && s.TrackId == session.TrackId);
         if (sentence is null) return NotFound();
-
-        _db.PracticeRecords.Add(new PracticeRecord
-        {
-            Id = Guid.NewGuid(),
-            UserId = userId,
-            SentenceId = sentence.Id,
-            SubmittedText = request.SubmittedText,
-            IsCorrect = true,
-            AccuracyScore = 1.0,
-            DiffDetail = "[]",
-            CreatedAt = DateTime.UtcNow
-        });
 
         // Logged for future activity-streak tracking (see spec §9); DailyPracticeLog's own unique
         // index (UserId, Date, SentenceId, PracticeType) makes retries same-day a no-op insert, not a duplicate.
@@ -132,7 +122,7 @@ public class PracticeSessionsController : ControllerBase
     public async Task<IActionResult> Advance(Guid sessionId, AdvanceSessionRequest request)
     {
         var userId = User.GetUserId();
-        var session = await _db.PracticeSessions.FirstOrDefaultAsync(s => s.Id == sessionId && s.UserId == userId);
+        var session = await _db.PracticeSessions.FirstOrDefaultAsync(s => s.Id == sessionId && s.UserId == userId && s.Mode == PracticeMode.Sentence);
         if (session is null) return NotFound();
 
         var sentenceCount = await _db.Sentences.CountAsync(s => s.TrackId == session.TrackId);
@@ -141,22 +131,13 @@ public class PracticeSessionsController : ControllerBase
         session.CurrentSentenceIndex = request.ToIndex;
         session.UpdatedAt = DateTime.UtcNow;
 
-        double? overallAccuracy = null;
         if (isCompleted)
         {
             session.Status = PracticeSessionStatus.Completed;
             session.CompletedAt = DateTime.UtcNow;
-
-            var records = await _db.PracticeRecords
-                .Where(r => r.UserId == userId && r.Sentence.TrackId == session.TrackId)
-                .Select(r => new { r.SentenceId, r.AccuracyScore, r.CreatedAt })
-                .ToListAsync();
-
-            overallAccuracy = TrackAccuracyCalculator.ComputeOverallAccuracy(
-                records.Select(r => (r.SentenceId, r.AccuracyScore, r.CreatedAt)));
         }
 
         await _db.SaveChangesAsync();
-        return Ok(new AdvanceSessionResponse(session.CurrentSentenceIndex, isCompleted, overallAccuracy));
+        return Ok(new AdvanceSessionResponse(session.CurrentSentenceIndex, isCompleted));
     }
 }

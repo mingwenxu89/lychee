@@ -49,6 +49,10 @@ export async function changeUserPassword(token: string, currentPassword: string,
 export async function authenticatedFetch(path: string, token: string, init?: RequestInit): Promise<Response> {
   return fetch(`${BACKEND_API_URL}${path}`, {
     ...init,
+    // Every response through here is per-session/per-request (practice progress, favorites,
+    // time-limited presigned media URLs) — Next.js's dev-mode fetch cache must never serve a
+    // stale one back, so this always goes to the backend fresh rather than opting in per call.
+    cache: 'no-store',
     headers: {
       ...(init?.headers ?? {}),
       Authorization: `Bearer ${token}`

@@ -7,7 +7,7 @@
   --primary: oklch(62% 0.19 25);
   --primary-dark: oklch(50% 0.18 25);
   --primary-soft: oklch(94% 0.035 25);
-  --leaf: oklch(62% 0.13 145);
+  --leaf: oklch(60% 0.19 145);
   --leaf-dark: oklch(45% 0.12 145);
   --leaf-soft: oklch(94% 0.045 145);
   --error: oklch(56% 0.20 18);
@@ -31,8 +31,12 @@ h1, h2, h3, .display {
   font-family: 'Fredoka', ui-rounded, system-ui, sans-serif;
 }
 
-.dictation-answer::placeholder {
-  color: var(--ink-faint);
+/* Applies to every text input/textarea in the app, not just dictation answer boxes — lighter
+   than --ink-faint (the lightest ink token) so placeholder text reads as an unobtrusive hint
+   rather than competing with typed content. */
+input::placeholder,
+textarea::placeholder {
+  color: oklch(82% 0.01 270);
 }
 
 @keyframes recording-dot-blink {

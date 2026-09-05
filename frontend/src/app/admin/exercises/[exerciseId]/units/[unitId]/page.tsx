@@ -303,7 +303,10 @@ function FileDropzone({
   onChange: (file: File | null) => void
 }) {
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
+    // minWidth: 0 overrides the flex item's default min-width: auto — without it, a long
+    // filename below would keep this box (and the dialog around it) growing to fit the text
+    // instead of letting it shrink to the row's available width so the ellipsis can kick in.
+    <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
       <span style={labelStyle}>{label}</span>
       <label
         style={{
@@ -320,7 +323,19 @@ function FileDropzone({
         }}
       >
         <UploadIcon />
-        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink-soft)' }}>{file ? file.name : 'Click to upload'}</span>
+        <span
+          style={{
+            fontSize: 13,
+            fontWeight: 700,
+            color: 'var(--ink-soft)',
+            maxWidth: '100%',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap'
+          }}
+        >
+          {file ? file.name : 'Click to upload'}
+        </span>
         <span style={{ fontSize: 11.5, color: 'var(--ink-faint)', fontWeight: 600 }}>{hint}</span>
         <input
           type="file"

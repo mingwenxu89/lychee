@@ -36,9 +36,29 @@ function dictationWordStyle(status: WordDiff['status']): React.CSSProperties {
   }
 }
 
-export function DiffText({ words, variant = 'default' }: { words: WordDiff[]; variant?: 'default' | 'dictation' }) {
+export function DiffText({
+  words,
+  variant = 'default',
+  correctColor,
+  incorrectColor
+}: {
+  words: WordDiff[]
+  variant?: 'default' | 'dictation'
+  // Override the dictation variant's "Correct"/"Incorrect"+"Missing" word colors for callers
+  // that want their own palette (e.g. Full Dictation's result screens, which distinguish right
+  // from wrong purely by color, no checkmark) without changing every other DiffText usage.
+  correctColor?: string
+  incorrectColor?: string
+}) {
   const visibleWords = variant === 'dictation' ? words.filter((w) => w.status !== 'Extra') : words
   const styleFor = variant === 'dictation' ? dictationWordStyle : wordStyle
+
+  function resolvedStyle(status: WordDiff['status']): React.CSSProperties {
+    const base = styleFor(status)
+    if (correctColor && status === 'Correct') return { ...base, color: correctColor }
+    if (incorrectColor && (status === 'Incorrect' || status === 'Missing')) return { ...base, color: incorrectColor }
+    return base
+  }
 
   return (
     <span>
@@ -47,7 +67,7 @@ export function DiffText({ words, variant = 'default' }: { words: WordDiff[]; va
         // selecting and copying this text reproduces actual spaces rather than
         // running every word together.
         <span key={i}>
-          <span data-status={w.status} style={styleFor(w.status)}>{w.word}</span>
+          <span data-status={w.status} style={resolvedStyle(w.status)}>{w.word}</span>
           {i < visibleWords.length - 1 ? ' ' : ''}
         </span>
       ))}

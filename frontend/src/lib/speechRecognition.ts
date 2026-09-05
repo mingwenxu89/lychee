@@ -46,17 +46,24 @@ export function createSingleUtteranceRecognizer(onResult: (text: string) => void
 export function createContinuousRecognizer(onTranscriptUpdate: (text: string) => void, onEnd?: () => void) {
   const Constructor = getSpeechRecognitionConstructor()
   if (!Constructor) {
-    return { start: () => {}, stop: () => {} }
+    return { start: () => {}, stop: () => {}, resetSegment: () => {} }
   }
   const recognition = new Constructor()
   recognition.continuous = true
   recognition.interimResults = false
+  // The underlying API's event.results never shrinks or resets on its own — it keeps every
+  // result recognized since .start() was called. segmentStartIndex lets a caller mark "the
+  // sentence boundary is here" without stopping the recognizer, so listening stays uninterrupted
+  // (mic never audibly drops) while each onresult only reports text recognized since that mark.
+  let segmentStartIndex = 0
+  let latestResultsLength = 0
   recognition.onresult = (event) => {
-    let fullTranscript = ''
-    for (let i = 0; i < event.results.length; i++) {
-      fullTranscript += (fullTranscript ? ' ' : '') + event.results[i][0].transcript
+    latestResultsLength = event.results.length
+    let segmentTranscript = ''
+    for (let i = segmentStartIndex; i < event.results.length; i++) {
+      segmentTranscript += (segmentTranscript ? ' ' : '') + event.results[i][0].transcript
     }
-    onTranscriptUpdate(fullTranscript)
+    onTranscriptUpdate(segmentTranscript)
   }
   if (onEnd) {
     recognition.onend = onEnd
@@ -64,6 +71,9 @@ export function createContinuousRecognizer(onTranscriptUpdate: (text: string) =>
 
   return {
     start: () => recognition.start(),
-    stop: () => recognition.stop()
+    stop: () => recognition.stop(),
+    resetSegment: () => {
+      segmentStartIndex = latestResultsLength
+    }
   }
 }

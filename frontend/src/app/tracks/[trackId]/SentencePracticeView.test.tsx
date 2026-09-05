@@ -1,15 +1,8 @@
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { Blob as NodeBlob } from 'node:buffer'
 import { SentencePracticeView } from './SentencePracticeView'
 import type { LearnerTrack } from './page'
 
-// jsdom's own `Blob` global doesn't implement `.stream()`, which Node's real
-// `Response` constructor (used by the `new Response(...)` fixtures below) requires.
-// This is a jsdom-environment limitation local to this file's fixtures, not a
-// production concern, so the fix is scoped here rather than in the shared
-// vitest.setup.ts (see: prior Task 10 revert of a global jsdom monkey-patch).
-;(globalThis as unknown as { Blob: typeof Blob }).Blob = NodeBlob as unknown as typeof Blob
 
 const track: LearnerTrack = {
   id: 'track-1', unitId: 'unit-1', exerciseId: 'exercise-1', title: 'Test Track', description: null, exerciseTitle: 'Test Exercise', level: 'A1', wordsPerMinute: 120, duration: '00:00:04',
@@ -38,23 +31,35 @@ beforeEach(() => {
 describe('SentencePracticeView', () => {
   it('pre-downloads audio and starts the session before enabling checking', async () => {
     mockFetchSequence([
-      new Response(new Blob(['audio-bytes']), { status: 200 }),
       new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 })
     ])
 
-    render(<SentencePracticeView track={track} onCompleted={vi.fn()} />)
+    render(<SentencePracticeView track={track} onCompleted={vi.fn()} onBack={vi.fn()} audioObjectUrl="blob:fake" audioError={null}/>)
 
     expect(screen.getByRole('button', { name: /^check$/i })).toBeDisabled()
     await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
   })
 
+  it('calls onBack when the Back button is clicked', async () => {
+    mockFetchSequence([
+      new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 })
+    ])
+    const onBack = vi.fn()
+
+    render(<SentencePracticeView track={track} onCompleted={vi.fn()} onBack={onBack}  audioObjectUrl="blob:fake" audioError={null}/>)
+    await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
+
+    fireEvent.click(screen.getByRole('button', { name: /back/i }))
+
+    expect(onBack).toHaveBeenCalled()
+  })
+
   it('Check compares locally and, on a wrong answer, shows the diff without contacting the backend', async () => {
     const fetchMock = mockFetchSequence([
-      new Response(new Blob(['audio-bytes']), { status: 200 }),
       new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 })
     ])
 
-    render(<SentencePracticeView track={track} onCompleted={vi.fn()} />)
+    render(<SentencePracticeView track={track} onCompleted={vi.fn()} onBack={vi.fn()} audioObjectUrl="blob:fake" audioError={null}/>)
     await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
 
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Hello world.' } })
@@ -62,21 +67,20 @@ describe('SentencePracticeView', () => {
 
     expect(await screen.findByText('Hello')).toBeInTheDocument()
     expect(screen.getByText('there.')).toBeInTheDocument()
-    // A wrong answer is never sent to the backend at all — only the audio preload and
-    // session-start calls have happened.
-    expect(fetchMock).toHaveBeenCalledTimes(2)
+    // A wrong answer is never sent to the backend at all — only the session-start call has
+    // happened (audio is preloaded at the page level now, not through this component's fetch).
+    expect(fetchMock).toHaveBeenCalledTimes(1)
     // The "So close" icon and message are gone — only the diff itself is shown.
     expect(screen.queryByText(/so close/i)).not.toBeInTheDocument()
   })
 
   it('on a correct answer, hides the diff text and shows only the checkmark and message', async () => {
     mockFetchSequence([
-      new Response(new Blob(['audio-bytes']), { status: 200 }),
       new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 }),
       new Response(JSON.stringify({ accuracyScore: 1, isCorrect: true, words: [{ word: 'Hello', status: 'Correct' }, { word: 'there.', status: 'Correct' }] }), { status: 200 })
     ])
 
-    render(<SentencePracticeView track={track} onCompleted={vi.fn()} />)
+    render(<SentencePracticeView track={track} onCompleted={vi.fn()} onBack={vi.fn()} audioObjectUrl="blob:fake" audioError={null}/>)
     await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
 
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Hello there.' } })
@@ -88,12 +92,11 @@ describe('SentencePracticeView', () => {
 
   it('on a correct answer, replaces the typed text with the clean reference sentence', async () => {
     mockFetchSequence([
-      new Response(new Blob(['audio-bytes']), { status: 200 }),
       new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 }),
       new Response(JSON.stringify({ accuracyScore: 1, isCorrect: true, words: [{ word: 'well', status: 'Extra' }, { word: 'Hello', status: 'Correct' }, { word: 'there.', status: 'Correct' }] }), { status: 200 })
     ])
 
-    render(<SentencePracticeView track={track} onCompleted={vi.fn()} />)
+    render(<SentencePracticeView track={track} onCompleted={vi.fn()} onBack={vi.fn()} audioObjectUrl="blob:fake" audioError={null}/>)
     await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
 
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'well Hello there.' } })
@@ -106,28 +109,26 @@ describe('SentencePracticeView', () => {
   it('Skip advances the session and calls onCompleted after the last sentence', async () => {
     const onCompleted = vi.fn()
     mockFetchSequence([
-      new Response(new Blob(['audio-bytes']), { status: 200 }),
       new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 1, status: 'InProgress', completedAt: null }), { status: 200 }),
-      new Response(JSON.stringify({ currentSentenceIndex: 2, isCompleted: true, overallAccuracy: 0.9 }), { status: 200 })
+      new Response(JSON.stringify({ currentSentenceIndex: 2, isCompleted: true }), { status: 200 })
     ])
 
-    render(<SentencePracticeView track={track} onCompleted={onCompleted} />)
+    render(<SentencePracticeView track={track} onCompleted={onCompleted} onBack={vi.fn()} audioObjectUrl="blob:fake" audioError={null}/>)
     await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
 
     fireEvent.click(screen.getByRole('button', { name: /^skip$/i }))
 
-    await waitFor(() => expect(onCompleted).toHaveBeenCalledWith(0.9))
+    await waitFor(() => expect(onCompleted).toHaveBeenCalled())
   })
 
   it('Next advances after a correct submission', async () => {
     mockFetchSequence([
-      new Response(new Blob(['audio-bytes']), { status: 200 }),
       new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 }),
       new Response(JSON.stringify({ accuracyScore: 1, isCorrect: true, words: [{ word: 'Hello', status: 'Correct' }] }), { status: 200 }),
       new Response(JSON.stringify({ currentSentenceIndex: 1, isCompleted: false, overallAccuracy: null }), { status: 200 })
     ])
 
-    render(<SentencePracticeView track={track} onCompleted={vi.fn()} />)
+    render(<SentencePracticeView track={track} onCompleted={vi.fn()} onBack={vi.fn()} audioObjectUrl="blob:fake" audioError={null}/>)
     await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
 
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Hello there.' } })
@@ -143,12 +144,11 @@ describe('SentencePracticeView', () => {
 
   it('Reset is always visible and clears the result, the typed answer, and replays the audio', async () => {
     mockFetchSequence([
-      new Response(new Blob(['audio-bytes']), { status: 200 }),
       new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 }),
       new Response(JSON.stringify({ accuracyScore: 0, isCorrect: false, words: [{ word: 'Hello', status: 'Incorrect' }] }), { status: 200 })
     ])
 
-    render(<SentencePracticeView track={track} onCompleted={vi.fn()} />)
+    render(<SentencePracticeView track={track} onCompleted={vi.fn()} onBack={vi.fn()} audioObjectUrl="blob:fake" audioError={null}/>)
     await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
 
     expect(screen.getByRole('button', { name: /^reset$/i })).toBeInTheDocument()
@@ -172,12 +172,11 @@ describe('SentencePracticeView', () => {
 
   it('jumps to a clicked sentence in the list', async () => {
     mockFetchSequence([
-      new Response(new Blob(['audio-bytes']), { status: 200 }),
       new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 }),
       new Response(JSON.stringify({ currentSentenceIndex: 1, isCompleted: false, overallAccuracy: null }), { status: 200 })
     ])
 
-    render(<SentencePracticeView track={track} onCompleted={vi.fn()} />)
+    render(<SentencePracticeView track={track} onCompleted={vi.fn()} onBack={vi.fn()} audioObjectUrl="blob:fake" audioError={null}/>)
     await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
 
     fireEvent.click(screen.getByText('2'))
@@ -189,12 +188,11 @@ describe('SentencePracticeView', () => {
 
   it('clicking a Progress number only navigates, without marking anything done', async () => {
     mockFetchSequence([
-      new Response(new Blob(['audio-bytes']), { status: 200 }),
       new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 }),
       new Response(JSON.stringify({ currentSentenceIndex: 1, isCompleted: false, overallAccuracy: null }), { status: 200 })
     ])
 
-    render(<SentencePracticeView track={track} onCompleted={vi.fn()} />)
+    render(<SentencePracticeView track={track} onCompleted={vi.fn()} onBack={vi.fn()} audioObjectUrl="blob:fake" audioError={null}/>)
     await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
 
     fireEvent.click(screen.getByText('2'))
@@ -207,12 +205,11 @@ describe('SentencePracticeView', () => {
 
   it('the previous/next navigation arrows do not mark sentences as done in Progress', async () => {
     mockFetchSequence([
-      new Response(new Blob(['audio-bytes']), { status: 200 }),
       new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 }),
       new Response(JSON.stringify({ currentSentenceIndex: 1, isCompleted: false, overallAccuracy: null }), { status: 200 })
     ])
 
-    render(<SentencePracticeView track={track} onCompleted={vi.fn()} />)
+    render(<SentencePracticeView track={track} onCompleted={vi.fn()} onBack={vi.fn()} audioObjectUrl="blob:fake" audioError={null}/>)
     await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
 
     fireEvent.click(screen.getByRole('button', { name: /next sentence/i }))
@@ -223,27 +220,27 @@ describe('SentencePracticeView', () => {
 
   it('Skip marks the current sentence as done in Progress', async () => {
     mockFetchSequence([
-      new Response(new Blob(['audio-bytes']), { status: 200 }),
       new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 }),
       new Response(JSON.stringify({ currentSentenceIndex: 1, isCompleted: false, overallAccuracy: null }), { status: 200 })
     ])
 
-    render(<SentencePracticeView track={track} onCompleted={vi.fn()} />)
+    render(<SentencePracticeView track={track} onCompleted={vi.fn()} onBack={vi.fn()} audioObjectUrl="blob:fake" audioError={null}/>)
     await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
 
     fireEvent.click(screen.getByRole('button', { name: /^skip$/i }))
 
-    await waitFor(() => expect(screen.queryByText('1')).not.toBeInTheDocument())
+    // Progress buttons always show the sentence number now (no checkmark) — a done sentence is
+    // distinguished by its green background instead.
+    await waitFor(() => expect(screen.getByRole('button', { name: '1' })).toHaveStyle({ background: 'var(--leaf)' }))
   })
 
   it('still shows the correct result locally, but shows an inline error when saving the record fails', async () => {
     mockFetchSequence([
-      new Response(new Blob(['audio-bytes']), { status: 200 }),
       new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 }),
       new Response(null, { status: 500 })
     ])
 
-    render(<SentencePracticeView track={track} onCompleted={vi.fn()} />)
+    render(<SentencePracticeView track={track} onCompleted={vi.fn()} onBack={vi.fn()} audioObjectUrl="blob:fake" audioError={null}/>)
     await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
 
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Hello there.' } })
@@ -256,12 +253,11 @@ describe('SentencePracticeView', () => {
 
   it('shows an inline error and keeps the current sentence when advance fails', async () => {
     mockFetchSequence([
-      new Response(new Blob(['audio-bytes']), { status: 200 }),
       new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 }),
       new Response(null, { status: 500 })
     ])
 
-    render(<SentencePracticeView track={track} onCompleted={vi.fn()} />)
+    render(<SentencePracticeView track={track} onCompleted={vi.fn()} onBack={vi.fn()} audioObjectUrl="blob:fake" audioError={null}/>)
     await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
 
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'my draft answer' } })
@@ -273,11 +269,10 @@ describe('SentencePracticeView', () => {
 
   it('toggles the play button to a pause icon while the audio plays', async () => {
     mockFetchSequence([
-      new Response(new Blob(['audio-bytes']), { status: 200 }),
       new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 })
     ])
 
-    const { container } = render(<SentencePracticeView track={track} onCompleted={vi.fn()} />)
+    const { container } = render(<SentencePracticeView track={track} onCompleted={vi.fn()} onBack={vi.fn()} audioObjectUrl="blob:fake" audioError={null}/>)
     await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
 
     const audio = container.querySelector('audio')!
@@ -294,12 +289,11 @@ describe('SentencePracticeView', () => {
 
   it('the previous-sentence button is disabled on the first sentence and jumps back otherwise', async () => {
     mockFetchSequence([
-      new Response(new Blob(['audio-bytes']), { status: 200 }),
       new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 1, status: 'InProgress', completedAt: null }), { status: 200 }),
       new Response(JSON.stringify({ currentSentenceIndex: 0, isCompleted: false, overallAccuracy: null }), { status: 200 })
     ])
 
-    render(<SentencePracticeView track={track} onCompleted={vi.fn()} />)
+    render(<SentencePracticeView track={track} onCompleted={vi.fn()} onBack={vi.fn()} audioObjectUrl="blob:fake" audioError={null}/>)
     await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
 
     fireEvent.click(screen.getByRole('button', { name: /previous sentence/i }))
@@ -312,11 +306,10 @@ describe('SentencePracticeView', () => {
 
   it('disables the previous-sentence button on the first sentence', async () => {
     mockFetchSequence([
-      new Response(new Blob(['audio-bytes']), { status: 200 }),
       new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 })
     ])
 
-    render(<SentencePracticeView track={track} onCompleted={vi.fn()} />)
+    render(<SentencePracticeView track={track} onCompleted={vi.fn()} onBack={vi.fn()} audioObjectUrl="blob:fake" audioError={null}/>)
     await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
 
     expect(screen.getByRole('button', { name: /previous sentence/i })).toBeDisabled()
@@ -324,12 +317,11 @@ describe('SentencePracticeView', () => {
 
   it('the next-sentence button next to the play control navigates and autoplays the sentence', async () => {
     mockFetchSequence([
-      new Response(new Blob(['audio-bytes']), { status: 200 }),
       new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 }),
       new Response(JSON.stringify({ currentSentenceIndex: 1, isCompleted: false, overallAccuracy: null }), { status: 200 })
     ])
 
-    render(<SentencePracticeView track={track} onCompleted={vi.fn()} />)
+    render(<SentencePracticeView track={track} onCompleted={vi.fn()} onBack={vi.fn()} audioObjectUrl="blob:fake" audioError={null}/>)
     await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
 
     fireEvent.click(screen.getByRole('button', { name: /next sentence/i }))
@@ -342,12 +334,11 @@ describe('SentencePracticeView', () => {
 
   it('Skip does not autoplay the next sentence', async () => {
     mockFetchSequence([
-      new Response(new Blob(['audio-bytes']), { status: 200 }),
       new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 }),
       new Response(JSON.stringify({ currentSentenceIndex: 1, isCompleted: false, overallAccuracy: null }), { status: 200 })
     ])
 
-    render(<SentencePracticeView track={track} onCompleted={vi.fn()} />)
+    render(<SentencePracticeView track={track} onCompleted={vi.fn()} onBack={vi.fn()} audioObjectUrl="blob:fake" audioError={null}/>)
     await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
 
     fireEvent.click(screen.getByRole('button', { name: /^skip$/i }))
@@ -360,11 +351,10 @@ describe('SentencePracticeView', () => {
 
   it('the answer field is a multi-line textarea with 3 default rows', async () => {
     mockFetchSequence([
-      new Response(new Blob(['audio-bytes']), { status: 200 }),
       new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 })
     ])
 
-    render(<SentencePracticeView track={track} onCompleted={vi.fn()} />)
+    render(<SentencePracticeView track={track} onCompleted={vi.fn()} onBack={vi.fn()} audioObjectUrl="blob:fake" audioError={null}/>)
     await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
 
     const field = screen.getByRole('textbox')
@@ -389,11 +379,10 @@ describe('SentencePracticeView', () => {
     }))
 
     mockFetchSequence([
-      new Response(new Blob(['audio-bytes']), { status: 200 }),
       new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 })
     ])
 
-    render(<SentencePracticeView track={track} onCompleted={vi.fn()} />)
+    render(<SentencePracticeView track={track} onCompleted={vi.fn()} onBack={vi.fn()} audioObjectUrl="blob:fake" audioError={null}/>)
     await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
 
     expect(screen.queryByLabelText('Recording')).not.toBeInTheDocument()
@@ -432,11 +421,10 @@ describe('SentencePracticeView', () => {
     }))
 
     mockFetchSequence([
-      new Response(new Blob(['audio-bytes']), { status: 200 }),
       new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 })
     ])
 
-    render(<SentencePracticeView track={track} onCompleted={vi.fn()} />)
+    render(<SentencePracticeView track={track} onCompleted={vi.fn()} onBack={vi.fn()} audioObjectUrl="blob:fake" audioError={null}/>)
     await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
 
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Hello' } })
@@ -468,12 +456,11 @@ describe('SentencePracticeView', () => {
     }))
 
     mockFetchSequence([
-      new Response(new Blob(['audio-bytes']), { status: 200 }),
       new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 }),
       new Response(JSON.stringify({ accuracyScore: 0, isCorrect: false, words: [{ word: 'Hello', status: 'Incorrect' }] }), { status: 200 })
     ])
 
-    render(<SentencePracticeView track={track} onCompleted={vi.fn()} />)
+    render(<SentencePracticeView track={track} onCompleted={vi.fn()} onBack={vi.fn()} audioObjectUrl="blob:fake" audioError={null}/>)
     await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
 
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Wrong answer' } })
@@ -489,11 +476,10 @@ describe('SentencePracticeView', () => {
 
   it('shows the replay hint and opens/closes the shortcuts list', async () => {
     mockFetchSequence([
-      new Response(new Blob(['audio-bytes']), { status: 200 }),
       new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 })
     ])
 
-    render(<SentencePracticeView track={track} onCompleted={vi.fn()} />)
+    render(<SentencePracticeView track={track} onCompleted={vi.fn()} onBack={vi.fn()} audioObjectUrl="blob:fake" audioError={null}/>)
     await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
 
     expect(screen.getByText('Press "Ctrl" to replay.')).toBeInTheDocument()
@@ -510,11 +496,10 @@ describe('SentencePracticeView', () => {
   describe('keyboard shortcuts', () => {
     it('the shortcuts modal blocks the underlying keyboard shortcuts while open', async () => {
       mockFetchSequence([
-        new Response(new Blob(['audio-bytes']), { status: 200 }),
         new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 })
       ])
 
-      render(<SentencePracticeView track={track} onCompleted={vi.fn()} />)
+      render(<SentencePracticeView track={track} onCompleted={vi.fn()} onBack={vi.fn()} audioObjectUrl="blob:fake" audioError={null}/>)
       await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
 
       fireEvent.click(screen.getByRole('button', { name: /view other shortcuts/i }))
@@ -527,13 +512,12 @@ describe('SentencePracticeView', () => {
 
     it('Enter checks the answer, and Enter again advances after a correct check', async () => {
       mockFetchSequence([
-        new Response(new Blob(['audio-bytes']), { status: 200 }),
         new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 }),
         new Response(null, { status: 204 }),
         new Response(JSON.stringify({ currentSentenceIndex: 1, isCompleted: false, overallAccuracy: null }), { status: 200 })
       ])
 
-      render(<SentencePracticeView track={track} onCompleted={vi.fn()} />)
+      render(<SentencePracticeView track={track} onCompleted={vi.fn()} onBack={vi.fn()} audioObjectUrl="blob:fake" audioError={null}/>)
       await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
 
       fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Hello there.' } })
@@ -548,11 +532,10 @@ describe('SentencePracticeView', () => {
 
     it('tapping Ctrl alone rewinds to the sentence start and replays it', async () => {
       mockFetchSequence([
-        new Response(new Blob(['audio-bytes']), { status: 200 }),
         new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 })
       ])
 
-      const { container } = render(<SentencePracticeView track={track} onCompleted={vi.fn()} />)
+      const { container } = render(<SentencePracticeView track={track} onCompleted={vi.fn()} onBack={vi.fn()} audioObjectUrl="blob:fake" audioError={null}/>)
       await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
 
       const audio = container.querySelector('audio')!
@@ -567,11 +550,10 @@ describe('SentencePracticeView', () => {
 
     it('Space does not trigger play/pause — the button responds to clicks only', async () => {
       mockFetchSequence([
-        new Response(new Blob(['audio-bytes']), { status: 200 }),
         new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 })
       ])
 
-      render(<SentencePracticeView track={track} onCompleted={vi.fn()} />)
+      render(<SentencePracticeView track={track} onCompleted={vi.fn()} onBack={vi.fn()} audioObjectUrl="blob:fake" audioError={null}/>)
       await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
 
       fireEvent.keyDown(window, { key: ' ' })
@@ -583,12 +565,11 @@ describe('SentencePracticeView', () => {
 
     it('holding Ctrl and pressing > navigates to the next sentence and autoplays it', async () => {
       mockFetchSequence([
-        new Response(new Blob(['audio-bytes']), { status: 200 }),
         new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 }),
         new Response(JSON.stringify({ currentSentenceIndex: 1, isCompleted: false, overallAccuracy: null }), { status: 200 })
       ])
 
-      render(<SentencePracticeView track={track} onCompleted={vi.fn()} />)
+      render(<SentencePracticeView track={track} onCompleted={vi.fn()} onBack={vi.fn()} audioObjectUrl="blob:fake" audioError={null}/>)
       await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
 
       fireEvent.keyDown(window, { key: 'Control', ctrlKey: true })
@@ -605,12 +586,11 @@ describe('SentencePracticeView', () => {
 
     it('Ctrl+< moves to the previous sentence', async () => {
       mockFetchSequence([
-        new Response(new Blob(['audio-bytes']), { status: 200 }),
         new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 1, status: 'InProgress', completedAt: null }), { status: 200 }),
         new Response(JSON.stringify({ currentSentenceIndex: 0, isCompleted: false, overallAccuracy: null }), { status: 200 })
       ])
 
-      render(<SentencePracticeView track={track} onCompleted={vi.fn()} />)
+      render(<SentencePracticeView track={track} onCompleted={vi.fn()} onBack={vi.fn()} audioObjectUrl="blob:fake" audioError={null}/>)
       await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
 
       fireEvent.keyDown(window, { key: 'Control', ctrlKey: true })
@@ -623,11 +603,10 @@ describe('SentencePracticeView', () => {
 
     it('Ctrl+/ clears the result and typed answer and replays the audio, same as clicking Reset', async () => {
       mockFetchSequence([
-        new Response(new Blob(['audio-bytes']), { status: 200 }),
         new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 })
       ])
 
-      render(<SentencePracticeView track={track} onCompleted={vi.fn()} />)
+      render(<SentencePracticeView track={track} onCompleted={vi.fn()} onBack={vi.fn()} audioObjectUrl="blob:fake" audioError={null}/>)
       await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
 
       fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Wrong answer' } })
@@ -644,12 +623,11 @@ describe('SentencePracticeView', () => {
 
     it('Ctrl+Enter triggers Skip', async () => {
       mockFetchSequence([
-        new Response(new Blob(['audio-bytes']), { status: 200 }),
         new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 }),
         new Response(JSON.stringify({ currentSentenceIndex: 1, isCompleted: false, overallAccuracy: null }), { status: 200 })
       ])
 
-      render(<SentencePracticeView track={track} onCompleted={vi.fn()} />)
+      render(<SentencePracticeView track={track} onCompleted={vi.fn()} onBack={vi.fn()} audioObjectUrl="blob:fake" audioError={null}/>)
       await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
 
       fireEvent.keyDown(window, { key: 'Control', ctrlKey: true })
@@ -658,8 +636,9 @@ describe('SentencePracticeView', () => {
       await waitFor(() => expect(fetch).toHaveBeenLastCalledWith('/api/learner/practice-sessions/session-1/advance', expect.objectContaining({
         body: JSON.stringify({ toIndex: 1 })
       })))
-      // Skipping marks Progress, unlike plain navigation — sentence 1 no longer shows its number.
-      await waitFor(() => expect(screen.queryByText('1')).not.toBeInTheDocument())
+      // Skipping marks Progress, unlike plain navigation — sentence 1 turns green (Progress
+      // buttons always show the sentence number, no checkmark, so the color is what changes).
+      await waitFor(() => expect(screen.getByRole('button', { name: '1' })).toHaveStyle({ background: 'var(--leaf)' }))
     })
 
     it('Ctrl+M toggles the microphone', async () => {
@@ -676,11 +655,10 @@ describe('SentencePracticeView', () => {
       }))
 
       mockFetchSequence([
-        new Response(new Blob(['audio-bytes']), { status: 200 }),
         new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 })
       ])
 
-      render(<SentencePracticeView track={track} onCompleted={vi.fn()} />)
+      render(<SentencePracticeView track={track} onCompleted={vi.fn()} onBack={vi.fn()} audioObjectUrl="blob:fake" audioError={null}/>)
       await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
 
       fireEvent.keyDown(window, { key: 'Control', ctrlKey: true })
@@ -694,12 +672,11 @@ describe('SentencePracticeView', () => {
 
   it('toggles the current sentence favorite and calls the favorite endpoint', async () => {
     const fetchMock = mockFetchSequence([
-      new Response(new Blob(['audio-bytes']), { status: 200 }),
       new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 }),
       new Response(null, { status: 204 })
     ])
 
-    render(<SentencePracticeView track={track} onCompleted={vi.fn()} />)
+    render(<SentencePracticeView track={track} onCompleted={vi.fn()} onBack={vi.fn()} audioObjectUrl="blob:fake" audioError={null}/>)
     await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
 
     fireEvent.click(screen.getByRole('button', { name: 'Add sentence to favorites' }))

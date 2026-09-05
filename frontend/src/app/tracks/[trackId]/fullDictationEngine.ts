@@ -1,14 +1,13 @@
 import { compare } from '@/lib/textComparer'
 
 export type DictationSentence = { id: string; text: string; startTime: string; endTime: string }
-export type RoundStep = { sentenceId: string; requiresInput: boolean }
+export type RoundStep = { sentenceId: string }
 
-export function buildBlindRoundSteps(sentences: DictationSentence[], correctIds: ReadonlySet<string>): RoundStep[] {
-  return sentences.map((s) => ({ sentenceId: s.id, requiresInput: !correctIds.has(s.id) }))
-}
-
-export function buildFocusedRoundSteps(sentences: DictationSentence[], correctIds: ReadonlySet<string>): RoundStep[] {
-  return sentences.filter((s) => !correctIds.has(s.id)).map((s) => ({ sentenceId: s.id, requiresInput: true }))
+// Every Blind round — including round 2+ — re-tests every sentence, not just the ones still
+// wrong: an already-correct sentence isn't skipped, it's re-graded from whatever the learner
+// edits it to this round (see gradeBlindRound below).
+export function buildBlindRoundSteps(sentences: DictationSentence[]): RoundStep[] {
+  return sentences.map((s) => ({ sentenceId: s.id }))
 }
 
 // Batch-grades a blind round's collected answers against the reference sentences, returning

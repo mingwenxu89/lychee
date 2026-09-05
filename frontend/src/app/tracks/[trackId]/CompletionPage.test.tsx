@@ -16,6 +16,13 @@ describe('CompletionPage', () => {
     expect(await screen.findByText('Great work!')).toBeInTheDocument()
   })
 
+  it('hides the accuracy box when accuracyScore is null (Sentence Dictation no longer scores completion)', async () => {
+    render(<CompletionPage accuracyScore={null} hasNextTrack={true} onPracticeAgain={vi.fn()} onNextTrack={vi.fn()} />)
+
+    expect(screen.queryByText('Accuracy')).not.toBeInTheDocument()
+    expect(screen.getByText('Nice work!')).toBeInTheDocument()
+  })
+
   it('Practice Again calls its handler', async () => {
     const onPracticeAgain = vi.fn()
     render(<CompletionPage accuracyScore={0.85} hasNextTrack={true} onPracticeAgain={onPracticeAgain} onNextTrack={vi.fn()} />)

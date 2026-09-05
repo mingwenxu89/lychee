@@ -22,7 +22,7 @@ beforeEach(() => {
 
 describe('FullTextView', () => {
   it('hides the transcript by default and reveals it on click', () => {
-    render(<FullTextView track={track} onRecitationCompleted={vi.fn()} onStartFullDictation={vi.fn()} />)
+    render(<FullTextView track={track} onStartRecite={vi.fn()} onStartFullDictation={vi.fn()} onStartBySentence={vi.fn()} />)
 
     expect(screen.queryByText('Hello there.')).not.toBeInTheDocument()
 
@@ -32,7 +32,7 @@ describe('FullTextView', () => {
   })
 
   it('lets the user change playback speed', () => {
-    render(<FullTextView track={track} onRecitationCompleted={vi.fn()} onStartFullDictation={vi.fn()} />)
+    render(<FullTextView track={track} onStartRecite={vi.fn()} onStartFullDictation={vi.fn()} onStartBySentence={vi.fn()} />)
 
     fireEvent.change(screen.getByLabelText(/speed/i), { target: { value: '1.5' } })
 
@@ -40,7 +40,7 @@ describe('FullTextView', () => {
   })
 
   it('clicking a revealed sentence does not navigate anywhere — the text is plain, freely selectable', () => {
-    render(<FullTextView track={track} onRecitationCompleted={vi.fn()} onStartFullDictation={vi.fn()} />)
+    render(<FullTextView track={track} onStartRecite={vi.fn()} onStartFullDictation={vi.fn()} onStartBySentence={vi.fn()} />)
     fireEvent.click(screen.getByRole('button', { name: /show text/i }))
 
     fireEvent.click(screen.getByText('Good morning.'))
@@ -51,7 +51,7 @@ describe('FullTextView', () => {
   })
 
   it('every sentence keeps a trailing play icon, separated by a divider, that seeks that sentence', () => {
-    render(<FullTextView track={track} onRecitationCompleted={vi.fn()} onStartFullDictation={vi.fn()} />)
+    render(<FullTextView track={track} onStartRecite={vi.fn()} onStartFullDictation={vi.fn()} onStartBySentence={vi.fn()} />)
     fireEvent.click(screen.getByRole('button', { name: /show text/i }))
 
     const playSentence1 = screen.getByRole('button', { name: 'Play sentence 1' })
@@ -66,25 +66,35 @@ describe('FullTextView', () => {
     expect(window.HTMLMediaElement.prototype.play).toHaveBeenCalled()
   })
 
-  it('opens the recitation panel from the Recite button', () => {
-    render(<FullTextView track={track} onRecitationCompleted={vi.fn()} onStartFullDictation={vi.fn()} />)
+  it('calls onStartRecite when the Recite button is clicked — Recite is a full page now, not a modal rendered here', () => {
+    const onStartRecite = vi.fn()
+    render(<FullTextView track={track} onStartRecite={onStartRecite} onStartFullDictation={vi.fn()} onStartBySentence={vi.fn()} />)
 
     fireEvent.click(screen.getByRole('button', { name: /^recite$/i }))
 
-    expect(screen.getByRole('button', { name: /submit/i })).toBeInTheDocument()
+    expect(onStartRecite).toHaveBeenCalled()
   })
 
   it('calls onStartFullDictation when the Start Full Dictation button is clicked', () => {
     const onStartFullDictation = vi.fn()
-    render(<FullTextView track={track} onRecitationCompleted={vi.fn()} onStartFullDictation={onStartFullDictation} />)
+    render(<FullTextView track={track} onStartRecite={vi.fn()} onStartFullDictation={onStartFullDictation} onStartBySentence={vi.fn()} />)
 
-    fireEvent.click(screen.getByRole('button', { name: /start full dictation/i }))
+    fireEvent.click(screen.getByRole('button', { name: /full dictation/i }))
 
     expect(onStartFullDictation).toHaveBeenCalled()
   })
 
+  it('calls onStartBySentence when the Start By Sentence button is clicked', () => {
+    const onStartBySentence = vi.fn()
+    render(<FullTextView track={track} onStartRecite={vi.fn()} onStartFullDictation={vi.fn()} onStartBySentence={onStartBySentence} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /sentence dictation/i }))
+
+    expect(onStartBySentence).toHaveBeenCalled()
+  })
+
   it('Show Text toggles back to Hide Text and collapses the transcript again', () => {
-    render(<FullTextView track={track} onRecitationCompleted={vi.fn()} onStartFullDictation={vi.fn()} />)
+    render(<FullTextView track={track} onStartRecite={vi.fn()} onStartFullDictation={vi.fn()} onStartBySentence={vi.fn()} />)
 
     fireEvent.click(screen.getByRole('button', { name: /show text/i }))
     expect(screen.getByText('Hello there.')).toBeInTheDocument()
@@ -94,7 +104,7 @@ describe('FullTextView', () => {
   })
 
   it('toggles the play button to a pause icon while the audio plays, with no separate pause button', async () => {
-    const { container } = render(<FullTextView track={track} onRecitationCompleted={vi.fn()} onStartFullDictation={vi.fn()} />)
+    const { container } = render(<FullTextView track={track} onStartRecite={vi.fn()} onStartFullDictation={vi.fn()} onStartBySentence={vi.fn()} />)
 
     expect(screen.getByRole('button', { name: /^play$/i })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /^pause$/i })).not.toBeInTheDocument()
@@ -108,7 +118,7 @@ describe('FullTextView', () => {
   })
 
   it('Space toggles play/pause, but does nothing while the speed select is focused', () => {
-    render(<FullTextView track={track} onRecitationCompleted={vi.fn()} onStartFullDictation={vi.fn()} />)
+    render(<FullTextView track={track} onStartRecite={vi.fn()} onStartFullDictation={vi.fn()} onStartBySentence={vi.fn()} />)
 
     const select = screen.getByLabelText(/speed/i)
     select.focus()
@@ -124,7 +134,7 @@ describe('FullTextView', () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }))
     vi.stubGlobal('fetch', fetchMock)
 
-    render(<FullTextView track={track} onRecitationCompleted={vi.fn()} onStartFullDictation={vi.fn()} />)
+    render(<FullTextView track={track} onStartRecite={vi.fn()} onStartFullDictation={vi.fn()} onStartBySentence={vi.fn()} />)
     fireEvent.click(screen.getByRole('button', { name: /show text/i }))
 
     fireEvent.click(screen.getByRole('button', { name: 'Add sentence 2 to favorites' }))
@@ -139,7 +149,7 @@ describe('FullTextView', () => {
   it('seeks to the initial sentence and reveals the text, without autoplaying', () => {
     // initialSentenceIndex is the sentence's `index` field (caption cue number), not its
     // array position — sentence "Good morning." has index 2 but sits at array position 1.
-    render(<FullTextView track={track} initialSentenceIndex={2} onRecitationCompleted={vi.fn()} onStartFullDictation={vi.fn()} />)
+    render(<FullTextView track={track} initialSentenceIndex={2} onStartRecite={vi.fn()} onStartFullDictation={vi.fn()} onStartBySentence={vi.fn()} />)
 
     const audio = document.querySelector('audio')!
     expect(audio.currentTime).toBe(2)

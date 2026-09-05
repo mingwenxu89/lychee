@@ -11,7 +11,7 @@ describe('RecitationPanel', () => {
 
   it('computes the diff locally, shows it immediately, and records the attempt in the background', async () => {
     const onCompleted = vi.fn()
-    render(<RecitationPanel trackId="track-1" sentences={sentences} onCompleted={onCompleted} onClose={vi.fn()} />)
+    render(<RecitationPanel trackId="track-1" sentences={sentences} onCompleted={onCompleted} onBack={vi.fn()} />)
 
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Hello there' } })
     fireEvent.click(screen.getByRole('button', { name: /submit/i }))
@@ -31,6 +31,10 @@ describe('RecitationPanel', () => {
         qualifiedSentenceIds: ['s1']
       })
     })))
+    // The result is scored per sentence now — the single reference sentence here is fully
+    // matched, so it lands in "Sentences Nailed" (0 "Sentences Missed").
+    expect(screen.getByText('Sentences Nailed').previousSibling).toHaveTextContent('1')
+    expect(screen.getByText('Sentences Missed').previousSibling).toHaveTextContent('0')
 
     fireEvent.click(screen.getByRole('button', { name: /^done$/i }))
     expect(onCompleted).toHaveBeenCalledWith(1)
@@ -38,7 +42,7 @@ describe('RecitationPanel', () => {
 
   it('Recite Again clears the result and returns to recording, with no onCompleted call', async () => {
     const onCompleted = vi.fn()
-    render(<RecitationPanel trackId="track-1" sentences={sentences} onCompleted={onCompleted} onClose={vi.fn()} />)
+    render(<RecitationPanel trackId="track-1" sentences={sentences} onCompleted={onCompleted} onBack={vi.fn()} />)
 
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Hello there' } })
     fireEvent.click(screen.getByRole('button', { name: /submit/i }))
@@ -53,7 +57,7 @@ describe('RecitationPanel', () => {
 
   it('still shows the locally computed result when the background record fails, alongside an inline error', async () => {
     vi.mocked(fetch).mockResolvedValueOnce(new Response(null, { status: 500 }))
-    render(<RecitationPanel trackId="track-1" sentences={sentences} onCompleted={vi.fn()} onClose={vi.fn()} />)
+    render(<RecitationPanel trackId="track-1" sentences={sentences} onCompleted={vi.fn()} onBack={vi.fn()} />)
 
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Hello there' } })
     fireEvent.click(screen.getByRole('button', { name: /submit/i }))
@@ -62,13 +66,41 @@ describe('RecitationPanel', () => {
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/failed to save your recitation/i))
   })
 
-  it('close calls onClose without submitting', () => {
-    const onClose = vi.fn()
-    render(<RecitationPanel trackId="track-1" sentences={sentences} onCompleted={vi.fn()} onClose={onClose} />)
+  it('Back calls onBack without submitting', () => {
+    const onBack = vi.fn()
+    render(<RecitationPanel trackId="track-1" sentences={sentences} onCompleted={vi.fn()} onBack={onBack} />)
 
-    fireEvent.click(screen.getByRole('button', { name: /close/i }))
+    fireEvent.click(screen.getByRole('button', { name: /back/i }))
 
-    expect(onClose).toHaveBeenCalled()
+    expect(onBack).toHaveBeenCalled()
     expect(fetch).not.toHaveBeenCalled()
+  })
+
+  it('shows a mic button (not a "Start Recording" text button) that starts and stops the recognizer', () => {
+    class FakeSpeechRecognition {
+      continuous = false
+      interimResults = false
+      onresult: ((event: unknown) => void) | null = null
+      onend: (() => void) | null = null
+      start = vi.fn()
+      stop = vi.fn()
+    }
+    vi.stubGlobal('SpeechRecognition', vi.fn().mockImplementation(function (this: unknown) {
+      return new FakeSpeechRecognition()
+    }))
+
+    render(<RecitationPanel trackId="track-1" sentences={sentences} onCompleted={vi.fn()} onBack={vi.fn()} />)
+
+    expect(screen.queryByRole('button', { name: /start recording/i })).not.toBeInTheDocument()
+    const micButton = screen.getByRole('button', { name: /use microphone/i })
+
+    fireEvent.click(micButton)
+    expect(screen.getByRole('button', { name: /stop microphone/i })).toBeInTheDocument()
+    expect(screen.getByLabelText('Recording')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /stop microphone/i }))
+    expect(screen.getByRole('button', { name: /use microphone/i })).toBeInTheDocument()
+
+    vi.unstubAllGlobals()
   })
 })

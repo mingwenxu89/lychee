@@ -5,6 +5,8 @@ using System.Text;
 using Lychee.Api.Auth;
 using Lychee.Api.Controllers;
 using Lychee.Data;
+using Lychee.Data.Entities;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -133,11 +135,12 @@ public class PracticeSessionsControllerTests : IClassFixture<LycheeWebApplicatio
     }
 
     [Fact]
-    public async Task Submit_RecordsAnAnswerAsCorrect()
+    public async Task Submit_RecordsTodaysActivityStreakLogForEachSentence()
     {
-        // The frontend now determines correctness itself and only ever calls this endpoint to
-        // record a correct answer — the endpoint no longer re-checks the submitted text, so
-        // this proves the resulting record counts toward a completed session's accuracy.
+        // The frontend determines correctness itself and only ever calls this endpoint for a
+        // correct answer — the endpoint no longer re-checks the submitted text or persists it;
+        // its only lasting effect is a DailyPracticeLog entry per sentence, for the activity
+        // streak feature.
         var admin = AdminClient();
         var trackId = await CreateTrackWithTwoSentencesAsync(admin);
         var learner = await LearnerClientAsync();
@@ -151,13 +154,19 @@ public class PracticeSessionsControllerTests : IClassFixture<LycheeWebApplicatio
         foreach (var sentence in track!.Sentences)
         {
             var submitResponse = await learner.PostAsJsonAsync($"/api/learner/practice-sessions/{session!.Id}/submit",
-                new { sentenceId = sentence.Id, submittedText = sentence.Text });
+                new { sentenceId = sentence.Id });
             Assert.Equal(HttpStatusCode.NoContent, submitResponse.StatusCode);
         }
 
         var advanceResponse = await learner.PostAsJsonAsync($"/api/learner/practice-sessions/{session!.Id}/advance", new { toIndex = 2 });
         var advanced = await advanceResponse.Content.ReadFromJsonAsync<AdvanceSessionResponse>();
-        Assert.Equal(1.0, advanced!.OverallAccuracy);
+        Assert.True(advanced!.IsCompleted);
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<LycheeDbContext>();
+        var logCount = await db.DailyPracticeLogs.CountAsync(l =>
+            l.Sentence.TrackId == trackId && l.PracticeType == PracticeLogType.Practice);
+        Assert.Equal(2, logCount);
     }
 
     [Fact]
@@ -175,11 +184,10 @@ public class PracticeSessionsControllerTests : IClassFixture<LycheeWebApplicatio
         var result = await response.Content.ReadFromJsonAsync<AdvanceSessionResponse>();
         Assert.Equal(1, result!.CurrentSentenceIndex);
         Assert.False(result.IsCompleted);
-        Assert.Null(result.OverallAccuracy);
     }
 
     [Fact]
-    public async Task Advance_PastLastSentence_CompletesSessionAndComputesAccuracy()
+    public async Task Advance_PastLastSentence_CompletesSessionAndAllowsRestarting()
     {
         var admin = AdminClient();
         var trackId = await CreateTrackWithTwoSentencesAsync(admin);
@@ -199,7 +207,6 @@ public class PracticeSessionsControllerTests : IClassFixture<LycheeWebApplicatio
 
         var result = await response.Content.ReadFromJsonAsync<AdvanceSessionResponse>();
         Assert.True(result!.IsCompleted);
-        Assert.Equal(1.0, result.OverallAccuracy);
 
         var reStartResponse = await learner.PostAsync($"/api/learner/tracks/{trackId}/practice-session/start", null);
         var reStarted = await reStartResponse.Content.ReadFromJsonAsync<PracticeSessionResponse>();
