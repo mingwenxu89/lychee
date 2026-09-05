@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { ChangePasswordModal } from './ChangePasswordModal'
+import lycheeIcon from '@/app/icon.png'
 
 type NavBarProps = {
   rankLabel: string
@@ -43,9 +44,10 @@ export function NavBar({ rankLabel, activityDays, userInitial }: NavBarProps) {
         borderBottom: '1px solid var(--line)'
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <img src={lycheeIcon.src} alt="" width={32} height={32} style={{ borderRadius: 8 }} />
         <span className="display" style={{ fontSize: 22, fontWeight: 700, color: 'var(--primary-dark)' }}>
-          Lychee
+          Lychee English
         </span>
       </div>
 

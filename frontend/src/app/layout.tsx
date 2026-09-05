@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import '@/styles/tokens.css'
 import { NavBar } from '@/components/NavBar'
 
-export const metadata = { title: 'Lychee' }
+export const metadata = { title: 'Lychee English' }
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
