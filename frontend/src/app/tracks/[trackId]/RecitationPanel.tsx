@@ -40,15 +40,15 @@ const btnGhost: React.CSSProperties = {
   cursor: 'pointer'
 }
 
-const statBox: React.CSSProperties = {
-  background: 'oklch(96% 0.01 80)',
-  borderRadius: 16,
-  padding: '12px 20px',
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 2,
-  alignItems: 'center'
+const btnGhostSmall: React.CSSProperties = {
+  ...btnGhost,
+  fontSize: 14,
+  padding: '9px 20px'
 }
+
+// Neutral light gray behind the per-sentence review list on the result screen — deliberately
+// hueless (unlike the app's warm --bg/--surface tones) so it reads as a distinct review area.
+const resultPanelBg = 'oklch(96% 0 0)'
 
 // Matches FullDictationView's result screens exactly — deeper green than the shared
 // --leaf-dark (scoped locally there too, since --leaf-dark is used more widely elsewhere) —
@@ -124,7 +124,6 @@ export function RecitationPanel({
 
   if (result) {
     const qualifiedCount = result.sentenceResults.filter((s) => s.isQualified).length
-    const missedCount = result.sentenceResults.length - qualifiedCount
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 18, width: 760, maxWidth: '100%' }}>
         <div style={{ ...cardStyle, padding: 26, display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -142,26 +141,20 @@ export function RecitationPanel({
                 <span style={{ fontSize: 13, color: 'var(--ink-faint)', fontWeight: 600 }}>Graded sentence by sentence</span>
               </div>
             </div>
-            <span style={{ background: 'var(--leaf-dark)', color: 'white', fontWeight: 800, fontSize: 14, borderRadius: 999, padding: '8px 18px' }}>
-              {Math.round(result.score * 100)}% correct
-            </span>
-          </div>
-
-          <div style={{ display: 'flex', gap: 14 }}>
-            <div style={statBox}>
-              <span style={{ fontSize: 20, fontWeight: 800, color: 'var(--primary)' }}>{qualifiedCount}</span>
-              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-faint)' }}>Sentences Nailed</span>
-            </div>
-            <div style={statBox}>
-              <span style={{ fontSize: 20, fontWeight: 800, color: 'var(--error)' }}>{missedCount}</span>
-              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-faint)' }}>Sentences Missed</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+              <span style={{ fontSize: 15, fontWeight: 800, color: 'var(--ink)' }}>
+                {qualifiedCount} / {result.sentenceResults.length} sentences
+              </span>
+              <span style={{ background: 'var(--leaf-dark)', color: 'white', fontWeight: 800, fontSize: 14, borderRadius: 999, padding: '8px 18px' }}>
+                {Math.round(result.score * 100)}% correct
+              </span>
             </div>
           </div>
 
           {/* Per-sentence, like Full Dictation's result screens — each sentence's own words
               colored correct/incorrect (pure color, no checkmarks), not one continuous paragraph,
               so a wrong word still shows exactly where it is without conflating sentences. */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14, maxHeight: '50vh', overflowY: 'auto', paddingRight: 6 }}>
+          <div style={{ background: resultPanelBg, borderRadius: 16, padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 14, maxHeight: '50vh', overflowY: 'auto' }}>
             {result.sentenceResults.map((s, i) => (
               <div key={s.sentenceId} style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
                 <span style={{ fontWeight: 800, fontSize: 13, lineHeight: '30.6px', width: 22, flexShrink: 0, color: 'var(--ink-faint)' }}>{i + 1}</span>
@@ -175,8 +168,8 @@ export function RecitationPanel({
           {submitError && <p role="alert" style={{ color: 'var(--error)', fontWeight: 700, margin: 0 }}>{submitError}</p>}
 
           <div style={{ display: 'flex', gap: 14, justifyContent: 'flex-end' }}>
-            <button onClick={handleReciteAgain} style={btnGhost}>Recite Again</button>
-            <button onClick={handleFinish} style={btnPrimary}>Done</button>
+            <button onClick={handleReciteAgain} style={btnGhostSmall}>Recite Again</button>
+            <button onClick={handleFinish} style={btnPrimarySmall}>Done</button>
           </div>
         </div>
       </div>

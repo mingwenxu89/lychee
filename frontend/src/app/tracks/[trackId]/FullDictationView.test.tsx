@@ -308,7 +308,7 @@ describe('FullDictationView — Blind round', () => {
     fireEvent.change(screen.getByPlaceholderText(/type what you hear/i), { target: { value: 'How are you?' } })
     fireEvent.click(screen.getByRole('button', { name: /next/i }))
 
-    await screen.findByRole('button', { name: /^continue$/i })
+    await screen.findByRole('button', { name: /^next round$/i })
     const submitted = bodiesFor(fetchMock, '/submit') as { sentenceId: string; isCorrect: boolean; submittedText: string }[]
     const bySentence = Object.fromEntries(submitted.map((s) => [s.sentenceId, s]))
     expect(bySentence.s3).toMatchObject({ isCorrect: true, submittedText: 'How are you?' })
@@ -524,9 +524,9 @@ describe('FullDictationView — Blind round', () => {
     fireEvent.change(screen.getByPlaceholderText(/type what you hear/i), { target: { value: 'completely wrong' } })
     fireEvent.click(screen.getByRole('button', { name: /next/i }))
 
-    await screen.findByRole('button', { name: /^continue$/i })
+    await screen.findByRole('button', { name: /^next round$/i })
     // The round-choice screen shows the same score + word-diff review as the final summary.
-    expect(screen.getByText('50%')).toBeInTheDocument()
+    expect(screen.getByText('50% correct')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /finish now/i })).toBeInTheDocument()
     expect(onCompleted).not.toHaveBeenCalled()
 
@@ -554,7 +554,7 @@ describe('FullDictationView — Blind round', () => {
     // "Done" only exists on the final summary screen (not the round-choice screen, which now
     // also shows a score) — waiting for it confirms Finish Now actually completed the session.
     await screen.findByRole('button', { name: /^done$/i })
-    expect(screen.getByText('50%')).toBeInTheDocument()
+    expect(screen.getByText('50% correct')).toBeInTheDocument()
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/learner/full-dictation-sessions/session-1/complete',
       expect.objectContaining({ method: 'POST' })
@@ -574,7 +574,7 @@ describe('FullDictationView — Blind round', () => {
     fireEvent.click(screen.getByRole('button', { name: /next/i }))
 
     await screen.findByText(/100%/)
-    expect(screen.queryByRole('button', { name: /^continue$/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^next round$/i })).not.toBeInTheDocument()
     expect(onCompleted).not.toHaveBeenCalled()
 
     fireEvent.click(screen.getByRole('button', { name: /^done$/i }))
@@ -621,7 +621,7 @@ describe('FullDictationView — Blind round', () => {
     fireEvent.change(screen.getByPlaceholderText(/type what you hear/i), { target: { value: 'not morning at all' } })
     fireEvent.click(screen.getByRole('button', { name: /next/i }))
 
-    await screen.findByRole('button', { name: /^continue$/i })
+    await screen.findByRole('button', { name: /^next round$/i })
     const submitted = bodiesFor(fetchMock, '/submit') as { sentenceId: string; isCorrect: boolean }[]
     const bySentence = Object.fromEntries(submitted.map((s) => [s.sentenceId, s.isCorrect]))
     expect(bySentence).toEqual({ s1: false, s2: false })
@@ -638,8 +638,8 @@ describe('FullDictationView — Blind round', () => {
     fireEvent.change(screen.getByPlaceholderText(/type what you hear/i), { target: { value: 'wrong' } })
     fireEvent.click(screen.getByRole('button', { name: /next/i }))
 
-    await screen.findByRole('button', { name: /^continue$/i })
-    expect(screen.getByText('50%')).toBeInTheDocument()
+    await screen.findByRole('button', { name: /^next round$/i })
+    expect(screen.getByText('50% correct')).toBeInTheDocument()
     // s1 was typed correctly — every word shows the deep-green "correct" color, same treatment
     // as the final summary screen.
     expect(screen.getByText('Hello')).toHaveStyle({ color: 'oklch(38% 0.13 145)' })
@@ -658,7 +658,7 @@ describe('FullDictationView — Blind round', () => {
     render(<FullDictationView track={track} onCompleted={vi.fn()} onBack={vi.fn()} audioObjectUrl="blob:fake" audioError={null} />)
 
     await screen.findByText(/sentence 2 \/ 2/i)
-    expect(screen.queryByRole('button', { name: /^continue$/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^next round$/i })).not.toBeInTheDocument()
     expect(screen.getByPlaceholderText(/type what you hear/i)).toHaveValue('completely wrong')
     expect(screen.getByRole('button', { name: '1' })).toHaveStyle({ background: 'var(--leaf)', color: 'rgb(255, 255, 255)' })
   })
@@ -677,9 +677,9 @@ describe('FullDictationView — Blind round', () => {
     await screen.findByPlaceholderText(/type what you hear/i)
     fireEvent.change(screen.getByPlaceholderText(/type what you hear/i), { target: { value: 'wrong' } })
     fireEvent.click(screen.getByRole('button', { name: /next/i }))
-    await screen.findByRole('button', { name: /^continue$/i })
+    await screen.findByRole('button', { name: /^next round$/i })
 
-    fireEvent.click(screen.getByRole('button', { name: /^continue$/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^next round$/i }))
     await screen.findByText(/sentence 1 \/ 2/i)
 
     // On round 2's first sentence (s1), the preview shows what was typed for the NEXT sentence
@@ -723,7 +723,7 @@ describe('FullDictationView — Blind round', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
-  it('clicking "Continue" starts the next round pre-filled with what was submitted for that sentence last round, so the learner edits rather than retypes', async () => {
+  it('clicking "Next Round" starts the next round pre-filled with what was submitted for that sentence last round, so the learner edits rather than retypes', async () => {
     mockFetch()
 
     render(<FullDictationView track={track} onCompleted={vi.fn()} onBack={vi.fn()} audioObjectUrl="blob:fake" audioError={null} />)
@@ -733,12 +733,12 @@ describe('FullDictationView — Blind round', () => {
     await screen.findByPlaceholderText(/type what you hear/i)
     fireEvent.change(screen.getByPlaceholderText(/type what you hear/i), { target: { value: 'wrong' } })
     fireEvent.click(screen.getByRole('button', { name: /next/i }))
-    await screen.findByRole('button', { name: /^continue$/i })
+    await screen.findByRole('button', { name: /^next round$/i })
 
-    fireEvent.click(screen.getByRole('button', { name: /^continue$/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^next round$/i }))
 
     await screen.findByText(/sentence 1 \/ 2/i)
-    expect(screen.queryByRole('button', { name: /^continue$/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^next round$/i })).not.toBeInTheDocument()
     // Round 2 starts on s1 again, pre-filled with round 1's answer for it (not blank).
     expect(screen.getByPlaceholderText(/type what you hear/i)).toHaveValue('Hello there.')
   })

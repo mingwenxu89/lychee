@@ -32,9 +32,8 @@ describe('RecitationPanel', () => {
       })
     })))
     // The result is scored per sentence now — the single reference sentence here is fully
-    // matched, so it lands in "Sentences Nailed" (0 "Sentences Missed").
-    expect(screen.getByText('Sentences Nailed').previousSibling).toHaveTextContent('1')
-    expect(screen.getByText('Sentences Missed').previousSibling).toHaveTextContent('0')
+    // matched, so 1 of 1 sentences is correct.
+    expect(screen.getByText('1 / 1 sentences')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: /^done$/i }))
     expect(onCompleted).toHaveBeenCalledWith(1)

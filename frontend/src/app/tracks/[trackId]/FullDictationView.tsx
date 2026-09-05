@@ -57,7 +57,7 @@ const btnPrimarySmall: React.CSSProperties = {
   boxShadow: 'none'
 }
 
-// Matches SentencePracticeView's btnGhostSmall — used so "Continue"/"Finish Now" read at the
+// Matches SentencePracticeView's btnGhostSmall — used so "Next Round"/"Finish Now" read at the
 // same size as Check/Skip rather than the larger default btnPrimary/btnGhost.
 const btnGhostSmall: React.CSSProperties = {
   ...btnGhost,
@@ -69,6 +69,36 @@ const btnGhostSmall: React.CSSProperties = {
 // word text/checkmark — --leaf-dark is a widely shared token (admin pages, other success
 // banners), so it's overridden locally here rather than darkened everywhere.
 const resultCorrectColor = 'oklch(38% 0.13 145)'
+
+// Matches RecitationPanel's result screen exactly, so a round's end reads the same whether it
+// came from Full Dictation or Recite: a neutral hueless gray behind the per-sentence review list.
+const resultPanelBg = 'oklch(96% 0 0)'
+
+// Shared by the round-choice and final-summary screens (see their render sites) so both present
+// the score identically — an icon+title on the left, sentence count and score badge on the right.
+function ResultHeader({ title, correctCount, total, score }: { title: string; correctCount: number; total: number; score: number }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ width: 44, height: 44, borderRadius: 999, background: 'var(--leaf-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--leaf-dark)" strokeWidth="2.5"><path d="M20 6L9 17l-5-5" /></svg>
+        </div>
+        <div>
+          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>{title}</h2>
+          <span style={{ fontSize: 13, color: 'var(--ink-faint)', fontWeight: 600 }}>Graded sentence by sentence</span>
+        </div>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+        <span style={{ fontSize: 15, fontWeight: 800, color: 'var(--ink)' }}>
+          {correctCount} / {total} sentences
+        </span>
+        <span style={{ background: 'var(--leaf-dark)', color: 'white', fontWeight: 800, fontSize: 14, borderRadius: 999, padding: '8px 18px' }}>
+          {Math.round(score * 100)}% correct
+        </span>
+      </div>
+    </div>
+  )
+}
 
 // Matches SentencePracticeView's chipStyle exactly, so the "Sentence N / Total" badge reads
 // identically in both views.
@@ -577,15 +607,15 @@ export function FullDictationView({
   if (summary) {
     return (
       <div style={{ ...cardStyle, padding: 26, display: 'flex', flexDirection: 'column', gap: 20, width: 760, maxWidth: '100%' }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-          <span style={{ fontWeight: 800, fontSize: 32, color: 'var(--ink)' }}>{Math.round(summary.score * 100)}%</span>
-          <span style={{ fontWeight: 700, fontSize: 15, color: 'var(--ink-faint)' }}>
-            {summary.finalCorrectSentenceIds.length} / {track.sentences.length} sentences correct
-          </span>
-        </div>
+        <ResultHeader
+          title="Full Dictation Complete"
+          correctCount={summary.finalCorrectSentenceIds.length}
+          total={track.sentences.length}
+          score={summary.score}
+        />
         {/* Capped and independently scrollable so a long track's full sentence list doesn't push
             the Done button off-screen — only this list scrolls, not the whole page. */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, maxHeight: '50vh', overflowY: 'auto', paddingRight: 6 }}>
+        <div style={{ background: resultPanelBg, borderRadius: 16, padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 14, maxHeight: '50vh', overflowY: 'auto' }}>
           {track.sentences.map((s, i) => {
             // Shows what the learner actually typed for this sentence in their last attempt,
             // word-diffed against the reference — correct words in green, incorrect/missing
@@ -601,8 +631,8 @@ export function FullDictationView({
             )
           })}
         </div>
-        <div>
-          <button onClick={() => onCompleted(summary.score)} style={btnPrimary}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <button onClick={() => onCompleted(summary.score)} style={btnPrimarySmall}>
             Done
           </button>
         </div>
@@ -811,17 +841,15 @@ export function FullDictationView({
               {/* Matches the final summary screen's review exactly — same score presentation and
                   same per-sentence word-diff highlighting — so every round's end looks and reads
                   the same, whether it's the round that finishes the session or not. */}
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-                <span style={{ fontWeight: 800, fontSize: 32, color: 'var(--ink)' }}>
-                  {Math.round((correctSentenceIds.size / Math.max(1, track.sentences.length)) * 100)}%
-                </span>
-                <span style={{ fontWeight: 700, fontSize: 15, color: 'var(--ink-faint)' }}>
-                  {correctSentenceIds.size} / {track.sentences.length} sentences correct
-                </span>
-              </div>
+              <ResultHeader
+                title="Round Complete"
+                correctCount={correctSentenceIds.size}
+                total={track.sentences.length}
+                score={correctSentenceIds.size / Math.max(1, track.sentences.length)}
+              />
               {/* Capped and independently scrollable so a long track's full sentence list
-                  doesn't push the Continue/Finish Now buttons off-screen. */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 14, maxHeight: '50vh', overflowY: 'auto', paddingRight: 6 }}>
+                  doesn't push the Next Round/Finish Now buttons off-screen. */}
+              <div style={{ background: resultPanelBg, borderRadius: 16, padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 14, maxHeight: '50vh', overflowY: 'auto' }}>
                 {track.sentences.map((s, i) => {
                   const { words } = compare(s.text, previousRoundAnswers.get(s.id) ?? '')
                   return (
@@ -836,7 +864,7 @@ export function FullDictationView({
               </div>
               <div style={{ display: 'flex', gap: 14 }}>
                 <button onClick={handleContinueBlindRound} disabled={isSubmitting} style={btnPrimarySmall}>
-                  Continue
+                  Next Round
                 </button>
                 <button onClick={handleFinishNow} disabled={isSubmitting} style={btnGhostSmall}>
                   Finish Now
