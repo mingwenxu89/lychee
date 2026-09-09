@@ -178,23 +178,62 @@ export function SentencePracticeView({
     audio.currentTime = sentenceStart
     setElapsedInSentence(0)
 
-    function onTimeUpdate() {
-      if (audio.currentTime >= sentenceEnd) {
+    // Stopping at sentenceEnd used to be driven off the 'timeupdate' event, but that event
+    // only fires every ~250ms (browser-dependent), so playback would audibly run 100-200ms
+    // past the boundary before the check even ran. A precisely-scheduled setTimeout, armed
+    // whenever playback actually starts/resumes/seeks, stops right on time instead.
+    let stopTimer: ReturnType<typeof setTimeout> | null = null
+
+    function clearStopTimer() {
+      if (stopTimer !== null) {
+        clearTimeout(stopTimer)
+        stopTimer = null
+      }
+    }
+
+    function scheduleStopTimer() {
+      clearStopTimer()
+      const remainingMs = (sentenceEnd - audio.currentTime) * 1000
+      if (remainingMs <= 0) return
+      stopTimer = setTimeout(() => {
         audio.pause()
         audio.currentTime = sentenceStart
         setElapsedInSentence(0)
-        return
-      }
-      setElapsedInSentence(audio.currentTime - sentenceStart)
+      }, remainingMs)
     }
+
+    function onTimeUpdate() {
+      setElapsedInSentence(Math.max(0, audio.currentTime - sentenceStart))
+    }
+    function onPlay() {
+      scheduleStopTimer()
+    }
+    function onPause() {
+      clearStopTimer()
+    }
+    function onSeeked() {
+      // Covers replay-while-already-playing (Ctrl): currentTime jumps back to sentenceStart
+      // without a 'play' event firing (playback never actually paused), so re-arm here too.
+      if (!audio.paused) scheduleStopTimer()
+    }
+
     audio.addEventListener('timeupdate', onTimeUpdate)
+    audio.addEventListener('play', onPlay)
+    audio.addEventListener('pause', onPause)
+    audio.addEventListener('seeked', onSeeked)
 
     if (autoplayOnChangeRef.current) {
       autoplayOnChangeRef.current = false
       audio.play()
     }
 
-    return () => audio.removeEventListener('timeupdate', onTimeUpdate)
+    return () => {
+      audio.removeEventListener('timeupdate', onTimeUpdate)
+      audio.removeEventListener('play', onPlay)
+      audio.removeEventListener('pause', onPause)
+      audio.removeEventListener('seeked', onSeeked)
+      clearStopTimer()
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentSentence])
 

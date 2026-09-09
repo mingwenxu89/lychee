@@ -234,9 +234,14 @@ describe('FullDictationView — Blind round', () => {
     await screen.findByPlaceholderText(/type what you hear/i)
 
     const audio = document.querySelector('audio')!
-    // s1 runs 00:00:00 -> 00:00:02.
-    Object.defineProperty(audio, 'currentTime', { value: 2, writable: true })
-    fireEvent(audio, new Event('timeupdate'))
+    // s1 runs 00:00:00 -> 00:00:02: starting playback at 0 schedules a stop 2s later
+    // (a setTimeout now, not a 'timeupdate' check — see the effect for why).
+    vi.useFakeTimers()
+    Object.defineProperty(audio, 'currentTime', { value: 0, writable: true })
+    fireEvent(audio, new Event('play'))
+    audio.currentTime = 1.5 // simulate real playback having advanced partway through
+    vi.advanceTimersByTime(2000)
+    vi.useRealTimers()
 
     expect(audio.currentTime).toBe(0)
   })
@@ -661,6 +666,9 @@ describe('FullDictationView — Blind round', () => {
     const pauseSpy = window.HTMLMediaElement.prototype.pause as ReturnType<typeof vi.fn>
     playSpy.mockClear()
 
+    // playResultSentence schedules its stop as a setTimeout (see there for why it's not a
+    // 'timeupdate' check), so fake timers need to be active before the click that starts it.
+    vi.useFakeTimers()
     fireEvent.click(screen.getByRole('button', { name: 'Play sentence 2' }))
 
     const audio = document.querySelector('audio')!
@@ -669,8 +677,8 @@ describe('FullDictationView — Blind round', () => {
 
     // Reaching s2's own end (00:00:04) pauses — it must not keep playing into whatever (there is
     // no sentence 3) would come after it.
-    Object.defineProperty(audio, 'currentTime', { value: 4, writable: true })
-    fireEvent(audio, new Event('timeupdate'))
+    vi.advanceTimersByTime(2000)
+    vi.useRealTimers()
     expect(pauseSpy).toHaveBeenCalledTimes(1)
   })
 

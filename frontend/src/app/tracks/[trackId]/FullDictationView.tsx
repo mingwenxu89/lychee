@@ -209,7 +209,7 @@ export function FullDictationView({
   // playResultSentence's own event-listener closures need the current value without re-binding.
   const [playingResultSentenceId, setPlayingResultSentenceId] = useState<string | null>(null)
   const playingResultSentenceIdRef = useRef<string | null>(null)
-  const resultTimeUpdateCleanupRef = useRef<(() => void) | null>(null)
+  const resultStopTimerCleanupRef = useRef<(() => void) | null>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const historyEndRef = useRef<HTMLDivElement>(null)
@@ -310,28 +310,64 @@ export function FullDictationView({
       hasAutoPlayedRef.current = true
     }
 
-    function onTimeUpdate() {
-      if (audio.currentTime >= sentenceEnd) {
+    // Stopping at sentenceEnd used to be driven off the 'timeupdate' event, but that event
+    // only fires every ~250ms (browser-dependent), so playback would audibly run 100-200ms
+    // past the boundary before the check even ran. A precisely-scheduled setTimeout, armed
+    // whenever playback actually starts/resumes/seeks, stops right on time instead — same
+    // fix as SentencePracticeView.
+    let stopTimer: ReturnType<typeof setTimeout> | null = null
+
+    function clearStopTimer() {
+      if (stopTimer !== null) {
+        clearTimeout(stopTimer)
+        stopTimer = null
+      }
+    }
+
+    function scheduleStopTimer() {
+      clearStopTimer()
+      const remainingMs = (sentenceEnd - audio.currentTime) * 1000
+      if (remainingMs <= 0) return
+      stopTimer = setTimeout(() => {
         audio.pause()
         audio.currentTime = sentenceStart
         setElapsedInSentence(0)
-        return
-      }
-      setElapsedInSentence(audio.currentTime - sentenceStart)
+      }, remainingMs)
     }
-    // 'ended' backs up 'timeupdate' for the final sentence: if the SRT's endTime slightly
-    // exceeds the real audio duration, currentTime may never quite reach `sentenceEnd` via
-    // timeupdate, but playback still fires 'ended' when it runs out.
+
+    function onTimeUpdate() {
+      setElapsedInSentence(Math.max(0, audio.currentTime - sentenceStart))
+    }
+    function onPlay() {
+      scheduleStopTimer()
+    }
+    function onPause() {
+      clearStopTimer()
+    }
+    function onSeeked() {
+      if (!audio.paused) scheduleStopTimer()
+    }
+    // 'ended' backs up the timer for the final sentence: if the SRT's endTime slightly
+    // exceeds the real audio duration, currentTime may never quite reach `sentenceEnd`,
+    // but playback still fires 'ended' when it runs out.
     function onEnded() {
+      clearStopTimer()
       audio.pause()
       audio.currentTime = sentenceStart
       setElapsedInSentence(0)
     }
     audio.addEventListener('timeupdate', onTimeUpdate)
+    audio.addEventListener('play', onPlay)
+    audio.addEventListener('pause', onPause)
+    audio.addEventListener('seeked', onSeeked)
     audio.addEventListener('ended', onEnded)
     return () => {
       audio.removeEventListener('timeupdate', onTimeUpdate)
+      audio.removeEventListener('play', onPlay)
+      audio.removeEventListener('pause', onPause)
+      audio.removeEventListener('seeked', onSeeked)
       audio.removeEventListener('ended', onEnded)
+      clearStopTimer()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stepIndex, currentSentence?.id, roundChoiceVisible])
@@ -643,24 +679,25 @@ export function FullDictationView({
     }
     stopPlayingResultSentence()
 
+    const start = parseTimeSpanToSeconds(sentence.startTime)
     const end = parseTimeSpanToSeconds(sentence.endTime)
-    audio.currentTime = parseTimeSpanToSeconds(sentence.startTime)
+    audio.currentTime = start
     setPlayingResultSentenceId(sentence.id)
     playingResultSentenceIdRef.current = sentence.id
 
-    function onTimeUpdate() {
-      if (audio!.currentTime >= end) stopPlayingResultSentence()
-    }
-    audio.addEventListener('timeupdate', onTimeUpdate)
-    resultTimeUpdateCleanupRef.current = () => audio.removeEventListener('timeupdate', onTimeUpdate)
+    // A setTimeout scheduled once up front, not a 'timeupdate' check — same reasoning as the
+    // active-dictation playback effects above: timeupdate only fires every ~250ms, so it lets
+    // playback run audibly past `end` before a check could catch it.
+    const stopTimer = setTimeout(() => stopPlayingResultSentence(), Math.max(0, (end - start) * 1000))
+    resultStopTimerCleanupRef.current = () => clearTimeout(stopTimer)
     audio.play()
   }
 
   function stopPlayingResultSentence() {
     if (playingResultSentenceIdRef.current === null) return
     audioRef.current?.pause()
-    resultTimeUpdateCleanupRef.current?.()
-    resultTimeUpdateCleanupRef.current = null
+    resultStopTimerCleanupRef.current?.()
+    resultStopTimerCleanupRef.current = null
     playingResultSentenceIdRef.current = null
     setPlayingResultSentenceId(null)
   }
