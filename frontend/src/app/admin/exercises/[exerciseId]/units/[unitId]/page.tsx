@@ -18,11 +18,12 @@ type Track = {
   duration: string
   level: string
   isPublished: boolean
+  order: number
   sentenceCount: number
 }
 
-type CreateFormValues = { title: string; level: string; description: string; audioFile: File | null; srtFile: File | null }
-type EditFormValues = { title: string; level: string; description: string }
+type CreateFormValues = { title: string; level: string; description: string; order: string; audioFile: File | null; srtFile: File | null }
+type EditFormValues = { title: string; level: string; description: string; order: string }
 type ModalState = { mode: 'create' } | { mode: 'edit'; id: string }
 
 const btnPrimary: React.CSSProperties = {
@@ -97,7 +98,7 @@ const labelStyle: React.CSSProperties = { fontWeight: 800, fontSize: 13, color: 
 
 const headerRowStyle: React.CSSProperties = {
   display: 'grid',
-  gridTemplateColumns: '1fr 80px 90px 150px 120px 210px',
+  gridTemplateColumns: '64px 1fr 80px 90px 150px 120px 210px',
   alignItems: 'center',
   padding: '14px 24px',
   background: 'oklch(96% 0.01 80)',
@@ -117,13 +118,26 @@ const headerCellStyle: React.CSSProperties = {
 function rowStyle(isLast: boolean): React.CSSProperties {
   return {
     display: 'grid',
-    gridTemplateColumns: '1fr 80px 90px 150px 120px 210px',
+    gridTemplateColumns: '64px 1fr 80px 90px 150px 120px 210px',
     alignItems: 'center',
     padding: '14px 24px',
     borderBottom: isLast ? 'none' : '1px solid var(--line)',
     borderBottomLeftRadius: isLast ? 22 : 0,
     borderBottomRightRadius: isLast ? 22 : 0
   }
+}
+
+const orderChipStyle: React.CSSProperties = {
+  width: 32,
+  height: 32,
+  borderRadius: 999,
+  background: 'oklch(96% 0.01 80)',
+  color: 'var(--ink-soft)',
+  fontWeight: 800,
+  fontSize: 13,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center'
 }
 
 const levelChipStyle: React.CSSProperties = {
@@ -399,16 +413,31 @@ function TrackCreateModal({
           />
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <label htmlFor="track-level" style={labelStyle}>Level (CEFR)</label>
-          <input
-            id="track-level"
-            required
-            value={form.level}
-            onChange={(e) => onChange({ ...form, level: e.target.value })}
-            placeholder="A1"
-            style={{ ...inputStyle, width: 120 }}
-          />
+        <div style={{ display: 'flex', gap: 14 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <label htmlFor="track-level" style={labelStyle}>Level (CEFR)</label>
+            <input
+              id="track-level"
+              required
+              value={form.level}
+              onChange={(e) => onChange({ ...form, level: e.target.value })}
+              placeholder="A1"
+              style={{ ...inputStyle, width: 120 }}
+            />
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <label htmlFor="track-order" style={labelStyle}>Order</label>
+            <input
+              id="track-order"
+              required
+              type="number"
+              min={1}
+              value={form.order}
+              onChange={(e) => onChange({ ...form, order: e.target.value })}
+              style={{ ...inputStyle, width: 90 }}
+            />
+          </div>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -485,15 +514,30 @@ function TrackEditModal({
           />
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <label htmlFor="edit-track-level" style={labelStyle}>Level (CEFR)</label>
-          <input
-            id="edit-track-level"
-            required
-            value={form.level}
-            onChange={(e) => onChange({ ...form, level: e.target.value })}
-            style={{ ...inputStyle, width: 120 }}
-          />
+        <div style={{ display: 'flex', gap: 14 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <label htmlFor="edit-track-level" style={labelStyle}>Level (CEFR)</label>
+            <input
+              id="edit-track-level"
+              required
+              value={form.level}
+              onChange={(e) => onChange({ ...form, level: e.target.value })}
+              style={{ ...inputStyle, width: 120 }}
+            />
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <label htmlFor="edit-track-order" style={labelStyle}>Order</label>
+            <input
+              id="edit-track-order"
+              required
+              type="number"
+              min={1}
+              value={form.order}
+              onChange={(e) => onChange({ ...form, order: e.target.value })}
+              style={{ ...inputStyle, width: 90 }}
+            />
+          </div>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -533,8 +577,8 @@ export default function UnitDetailPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [modal, setModal] = useState<ModalState | null>(null)
-  const [createForm, setCreateForm] = useState<CreateFormValues>({ title: '', level: '', description: '', audioFile: null, srtFile: null })
-  const [editForm, setEditForm] = useState<EditFormValues>({ title: '', level: '', description: '' })
+  const [createForm, setCreateForm] = useState<CreateFormValues>({ title: '', level: '', description: '', order: '1', audioFile: null, srtFile: null })
+  const [editForm, setEditForm] = useState<EditFormValues>({ title: '', level: '', description: '', order: '1' })
   const [formError, setFormError] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null)
@@ -563,13 +607,13 @@ export default function UnitDetailPage() {
   }, [exerciseId, unitId])
 
   function openCreateModal() {
-    setCreateForm({ title: '', level: '', description: '', audioFile: null, srtFile: null })
+    setCreateForm({ title: '', level: '', description: '', order: String(tracks.length + 1), audioFile: null, srtFile: null })
     setFormError(null)
     setModal({ mode: 'create' })
   }
 
   function openEditModal(track: Track) {
-    setEditForm({ title: track.title, level: track.level, description: track.description ?? '' })
+    setEditForm({ title: track.title, level: track.level, description: track.description ?? '', order: String(track.order) })
     setFormError(null)
     setModal({ mode: 'edit', id: track.id })
   }
@@ -589,6 +633,7 @@ export default function UnitDetailPage() {
     formData.append('Title', createForm.title)
     formData.append('Level', createForm.level)
     formData.append('Description', createForm.description)
+    formData.append('Order', createForm.order)
 
     const response = await fetch(`/api/admin/units/${unitId}/tracks`, { method: 'POST', body: formData })
     setIsSaving(false)
@@ -609,7 +654,7 @@ export default function UnitDetailPage() {
     const response = await fetch(`/api/admin/tracks/${modal.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: editForm.title, level: editForm.level, description: editForm.description || null })
+      body: JSON.stringify({ title: editForm.title, level: editForm.level, description: editForm.description || null, order: Number(editForm.order) })
     })
 
     setIsSaving(false)
@@ -691,6 +736,7 @@ export default function UnitDetailPage() {
         ) : (
           <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 22 }}>
             <div style={headerRowStyle}>
+              <span style={headerCellStyle}>Order</span>
               <span style={headerCellStyle}>Title</span>
               <span style={headerCellStyle}>Level</span>
               <span style={headerCellStyle}>Duration</span>
@@ -700,6 +746,7 @@ export default function UnitDetailPage() {
             </div>
             {filteredTracks.map((track, index) => (
               <div key={track.id} style={{ position: 'relative', ...rowStyle(index === filteredTracks.length - 1) }}>
+                <span style={orderChipStyle}>{track.order}</span>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 2, paddingRight: 16, minWidth: 0 }}>
                   <span style={{ fontWeight: 700, fontSize: 15 }}>{track.title}</span>
                   {track.description && <span style={descriptionStyle}>{track.description}</span>}

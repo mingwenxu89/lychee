@@ -104,10 +104,47 @@ describe('ExerciseDetailPage (Units)', () => {
     })
   })
 
-  it('does not show a delete action', async () => {
+  it('requires typing the exact unit title before Delete is enabled, then deletes it', async () => {
     render(<ExerciseDetailPage />)
     await screen.findByText('Listening Practice')
 
-    expect(screen.queryByRole('button', { name: /delete/i })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /delete listening practice/i }))
+    expect(screen.getByText('Delete this unit?')).toBeInTheDocument()
+
+    const deleteButton = screen.getByRole('button', { name: /^delete$/i })
+    expect(deleteButton).toBeDisabled()
+
+    fireEvent.change(screen.getByLabelText(/type ".*" to confirm/i), { target: { value: 'wrong name' } })
+    expect(deleteButton).toBeDisabled()
+
+    fireEvent.change(screen.getByLabelText(/type ".*" to confirm/i), { target: { value: 'Listening Practice' } })
+    expect(deleteButton).not.toBeDisabled()
+
+    mockFetchOnce(undefined, 204)
+    mockFetchOnce([])
+
+    fireEvent.click(deleteButton)
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith('/api/admin/units/unit-1', { method: 'DELETE' })
+    })
+    await waitFor(() => {
+      expect(screen.queryByText('Listening Practice')).not.toBeInTheDocument()
+    })
+  })
+
+  it('shows an error and keeps the unit if deletion fails', async () => {
+    render(<ExerciseDetailPage />)
+    await screen.findByText('Listening Practice')
+
+    fireEvent.click(screen.getByRole('button', { name: /delete listening practice/i }))
+    fireEvent.change(screen.getByLabelText(/type ".*" to confirm/i), { target: { value: 'Listening Practice' } })
+
+    mockFetchOnce(undefined, 500)
+
+    fireEvent.click(screen.getByRole('button', { name: /^delete$/i }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Failed to delete unit')
+    expect(screen.getByText('Listening Practice')).toBeInTheDocument()
   })
 })

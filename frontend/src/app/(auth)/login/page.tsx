@@ -4,7 +4,6 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { loginAccount } from '@/lib/apiClient'
-import lycheeIcon from '@/app/icon.png'
 
 const inputStyle: React.CSSProperties = {
   border: '2px solid var(--line)',
@@ -84,7 +83,6 @@ export default function LoginPage() {
     <main style={{ minHeight: 'calc(100vh - 60px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px 20px' }}>
       <div style={{ width: 400, maxWidth: '100%', background: 'var(--surface)', borderRadius: 28, boxShadow: 'none', padding: '40px 40px', display: 'flex', flexDirection: 'column', gap: 24 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center', textAlign: 'center' }}>
-          <img src={lycheeIcon.src} alt="Lychee" width={72} height={72} style={{ borderRadius: 16 }} />
           <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>Welcome back</h1>
           <span style={{ fontSize: 14, color: 'var(--ink-soft)', fontWeight: 600 }}>Log in to keep practicing</span>
         </div>

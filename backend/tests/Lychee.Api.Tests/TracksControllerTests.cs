@@ -3,7 +3,9 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
 using Lychee.Api.Auth;
+using Lychee.Storage;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Lychee.Api.Tests;
@@ -94,6 +96,77 @@ public class TracksControllerTests : IClassFixture<LycheeWebApplicationFactory>
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var track = await response.Content.ReadFromJsonAsync<TrackResponse>();
         Assert.Null(track!.Description);
+    }
+
+    [Fact]
+    public async Task Create_WithOrder_ReturnsOrderInResponse()
+    {
+        var client = AdminClient();
+        var unitId = await CreateUnitAsync(client);
+
+        using var form = new MultipartFormDataContent();
+        form.Add(new ByteArrayContent(Encoding.UTF8.GetBytes("audio")), "AudioFile", "a.mp3");
+        form.Add(new StringContent("1\n00:00:00,000 --> 00:00:01,000\nHi.\n"), "SrtFile", "a.srt");
+        form.Add(new StringContent("A1"), "Level");
+        form.Add(new StringContent("Test Track"), "Title");
+        form.Add(new StringContent("3"), "Order");
+
+        var response = await client.PostAsync($"/api/admin/units/{unitId}/tracks", form);
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var track = await response.Content.ReadFromJsonAsync<TrackResponse>();
+        Assert.Equal(3, track!.Order);
+    }
+
+    [Fact]
+    public async Task List_OrdersTracksByOrderField()
+    {
+        var client = AdminClient();
+        var unitId = await CreateUnitAsync(client);
+
+        async Task<TrackResponse> CreateTrackAsync(string title, int order)
+        {
+            using var form = new MultipartFormDataContent();
+            form.Add(new ByteArrayContent(Encoding.UTF8.GetBytes("audio")), "AudioFile", "a.mp3");
+            form.Add(new StringContent("1\n00:00:00,000 --> 00:00:01,000\nHi.\n"), "SrtFile", "a.srt");
+            form.Add(new StringContent("A1"), "Level");
+            form.Add(new StringContent(title), "Title");
+            form.Add(new StringContent(order.ToString()), "Order");
+            var response = await client.PostAsync($"/api/admin/units/{unitId}/tracks", form);
+            return (await response.Content.ReadFromJsonAsync<TrackResponse>())!;
+        }
+
+        var later = await CreateTrackAsync("Later", 20);
+        var earlier = await CreateTrackAsync("Earlier", 10);
+
+        var list = await (await client.GetAsync($"/api/admin/units/{unitId}/tracks")).Content.ReadFromJsonAsync<List<TrackResponse>>();
+
+        var earlierIndex = list!.FindIndex(t => t.Id == earlier.Id);
+        var laterIndex = list.FindIndex(t => t.Id == later.Id);
+        Assert.True(earlierIndex < laterIndex);
+    }
+
+    [Fact]
+    public async Task Update_ChangesOrder()
+    {
+        var client = AdminClient();
+        var unitId = await CreateUnitAsync(client);
+
+        using var form = new MultipartFormDataContent();
+        form.Add(new ByteArrayContent(Encoding.UTF8.GetBytes("audio")), "AudioFile", "a.mp3");
+        form.Add(new StringContent("1\n00:00:00,000 --> 00:00:01,000\nHi.\n"), "SrtFile", "a.srt");
+        form.Add(new StringContent("A1"), "Level");
+        form.Add(new StringContent("Original Title"), "Title");
+        form.Add(new StringContent("1"), "Order");
+        var createResponse = await client.PostAsync($"/api/admin/units/{unitId}/tracks", form);
+        var track = await createResponse.Content.ReadFromJsonAsync<TrackResponse>();
+
+        var updateResponse = await client.PutAsJsonAsync($"/api/admin/tracks/{track!.Id}",
+            new { title = track.Title, level = track.Level, description = track.Description, order = 5 });
+
+        Assert.Equal(HttpStatusCode.OK, updateResponse.StatusCode);
+        var updated = await updateResponse.Content.ReadFromJsonAsync<TrackResponse>();
+        Assert.Equal(5, updated!.Order);
     }
 
     [Fact]
@@ -246,6 +319,33 @@ public class TracksControllerTests : IClassFixture<LycheeWebApplicationFactory>
         Assert.DoesNotContain(listAfter!, t => t.Id == track.Id);
     }
 
+    [Fact]
+    public async Task Delete_AnExistingTrack_AlsoDeletesItsAudioAndSrtBlobFiles()
+    {
+        var client = AdminClient();
+        var unitId = await CreateUnitAsync(client);
+
+        using var form = new MultipartFormDataContent();
+        form.Add(new ByteArrayContent(Encoding.UTF8.GetBytes("audio")), "AudioFile", "a.mp3");
+        form.Add(new StringContent("1\n00:00:00,000 --> 00:00:01,000\nHi.\n"), "SrtFile", "a.srt");
+        form.Add(new StringContent("A1"), "Level");
+        form.Add(new StringContent("Test Track"), "Title");
+        var createResponse = await client.PostAsync($"/api/admin/units/{unitId}/tracks", form);
+        var track = await createResponse.Content.ReadFromJsonAsync<TrackResponse>();
+
+        var storageOptions = _factory.Services.GetRequiredService<IOptions<StorageOptions>>().Value;
+        var audioPath = TestBlobPaths.FromReadUrl(storageOptions, track!.AudioUrl);
+        var srtPath = TestBlobPaths.FromReadUrl(storageOptions, track.SrtUrl);
+        Assert.True(File.Exists(audioPath));
+        Assert.True(File.Exists(srtPath));
+
+        var deleteResponse = await client.DeleteAsync($"/api/admin/tracks/{track.Id}");
+        Assert.Equal(HttpStatusCode.NoContent, deleteResponse.StatusCode);
+
+        Assert.False(File.Exists(audioPath));
+        Assert.False(File.Exists(srtPath));
+    }
+
     private record IdOnly(Guid Id);
-    private record TrackResponse(Guid Id, Guid UnitId, string Title, string? Description, string AudioUrl, string SrtUrl, TimeSpan Duration, string Level, bool IsPublished, int SentenceCount);
+    private record TrackResponse(Guid Id, Guid UnitId, string Title, string? Description, string AudioUrl, string SrtUrl, TimeSpan Duration, string Level, bool IsPublished, int Order, int SentenceCount);
 }

@@ -15,11 +15,12 @@ public class CreateTrackRequest
     public string Level { get; set; } = null!;
     public string Title { get; set; } = null!;
     public string? Description { get; set; }
+    public int Order { get; set; }
 }
 
-public record TrackResponse(Guid Id, Guid UnitId, string Title, string? Description, string AudioUrl, string SrtUrl, TimeSpan Duration, string Level, bool IsPublished, int SentenceCount);
+public record TrackResponse(Guid Id, Guid UnitId, string Title, string? Description, string AudioUrl, string SrtUrl, TimeSpan Duration, string Level, bool IsPublished, int Order, int SentenceCount);
 
-public record UpdateTrackRequest(string Title, string Level, string? Description);
+public record UpdateTrackRequest(string Title, string Level, string? Description, int Order);
 // UpdatePublishStatusRequest is defined in ExercisesController.cs and shared (same namespace).
 
 [ApiController]
@@ -39,7 +40,7 @@ public class TracksController : ControllerBase
     {
         var audioUrl = await ResolveReadUrlAsync(t.AudioFileUrl);
         var srtUrl = await ResolveReadUrlAsync(t.SrtFileUrl);
-        return new TrackResponse(t.Id, t.UnitId, t.Title, t.Description, audioUrl, srtUrl, t.Duration, t.Level, t.IsPublished, sentenceCount);
+        return new TrackResponse(t.Id, t.UnitId, t.Title, t.Description, audioUrl, srtUrl, t.Duration, t.Level, t.IsPublished, t.Order, sentenceCount);
     }
 
     private Task<string> ResolveReadUrlAsync(string storedPath)
@@ -55,6 +56,7 @@ public class TracksController : ControllerBase
     {
         var tracks = await _db.Tracks
             .Where(t => t.UnitId == unitId)
+            .OrderBy(t => t.Order)
             .Include(t => t.Sentences)
             .ToListAsync();
         var responses = new List<TrackResponse>();
@@ -99,6 +101,7 @@ public class TracksController : ControllerBase
             Level = request.Level,
             Title = request.Title,
             Description = request.Description,
+            Order = request.Order,
             Sentences = cues.Select(c => new Sentence
             {
                 Id = Guid.NewGuid(),
@@ -133,6 +136,7 @@ public class TracksController : ControllerBase
         track.Title = request.Title;
         track.Level = request.Level;
         track.Description = request.Description;
+        track.Order = request.Order;
         await _db.SaveChangesAsync();
         return Ok(await ToResponseAsync(track, track.Sentences.Count));
     }
@@ -142,6 +146,9 @@ public class TracksController : ControllerBase
     {
         var track = await _db.Tracks.FindAsync(id);
         if (track is null) return NotFound();
+
+        await _blobStorageService.DeleteStoredAsync(track.AudioFileUrl);
+        await _blobStorageService.DeleteStoredAsync(track.SrtFileUrl);
 
         _db.Tracks.Remove(track);
         await _db.SaveChangesAsync();

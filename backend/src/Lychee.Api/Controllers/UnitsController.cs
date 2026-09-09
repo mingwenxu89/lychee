@@ -1,5 +1,6 @@
 using Lychee.Data;
 using Lychee.Data.Entities;
+using Lychee.Storage;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -16,8 +17,13 @@ public record UnitResponse(Guid Id, Guid ExerciseId, string Title, int Order, bo
 public class UnitsController : ControllerBase
 {
     private readonly LycheeDbContext _db;
+    private readonly IBlobStorageService _blobStorageService;
 
-    public UnitsController(LycheeDbContext db) => _db = db;
+    public UnitsController(LycheeDbContext db, IBlobStorageService blobStorageService)
+    {
+        _db = db;
+        _blobStorageService = blobStorageService;
+    }
 
     private static UnitResponse ToResponse(Unit u) =>
         new(u.Id, u.ExerciseId, u.Title, u.Order, u.IsPublished);
@@ -78,5 +84,26 @@ public class UnitsController : ControllerBase
         unit.IsPublished = request.IsPublished;
         await _db.SaveChangesAsync();
         return Ok(ToResponse(unit));
+    }
+
+    [HttpDelete("api/admin/units/{id}")]
+    public async Task<IActionResult> Delete(Guid id)
+    {
+        var unit = await _db.Units.FindAsync(id);
+        if (unit is null) return NotFound();
+
+        var trackBlobs = await _db.Tracks
+            .Where(t => t.UnitId == id)
+            .Select(t => new { t.AudioFileUrl, t.SrtFileUrl })
+            .ToListAsync();
+        foreach (var blob in trackBlobs)
+        {
+            await _blobStorageService.DeleteStoredAsync(blob.AudioFileUrl);
+            await _blobStorageService.DeleteStoredAsync(blob.SrtFileUrl);
+        }
+
+        _db.Units.Remove(unit);
+        await _db.SaveChangesAsync();
+        return NoContent();
     }
 }

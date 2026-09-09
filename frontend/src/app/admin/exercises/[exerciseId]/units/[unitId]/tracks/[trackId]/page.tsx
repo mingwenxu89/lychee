@@ -11,7 +11,7 @@ type Sentence = { id: string; trackId: string; index: number; text: string; star
 
 const headerRowStyle: React.CSSProperties = {
   display: 'grid',
-  gridTemplateColumns: '48px 1fr 110px 110px 96px',
+  gridTemplateColumns: '48px 1fr 160px 160px 96px',
   alignItems: 'center',
   padding: '14px 24px',
   background: 'oklch(96% 0.01 80)',
@@ -29,7 +29,7 @@ const headerCellStyle: React.CSSProperties = {
 function rowStyle(isLast: boolean, isDirty: boolean): React.CSSProperties {
   return {
     display: 'grid',
-    gridTemplateColumns: '48px 1fr 110px 110px 96px',
+    gridTemplateColumns: '48px 1fr 160px 160px 96px',
     alignItems: 'center',
     padding: '10px 24px',
     borderBottom: isLast ? 'none' : '1px solid var(--line)',
@@ -59,9 +59,21 @@ function timeInputStyle(isDirty: boolean): React.CSSProperties {
     fontWeight: 700,
     color: 'var(--ink-soft)',
     fontFamily: 'inherit',
-    width: 92,
+    width: 140,
     background: isDirty ? 'var(--surface)' : 'transparent'
   }
+}
+
+// Sentence timestamps are stored as full "HH:MM:SS.fffffff" TimeSpan strings, but no track
+// audio runs anywhere near an hour — showing the always-"00" hour segment just wastes width
+// the seconds/fraction need, so the input only ever shows/accepts "MM:SS.fffffff".
+function toDisplayTime(raw: string): string {
+  return raw.startsWith('00:') ? raw.slice(3) : raw
+}
+
+function toStoredTime(display: string): string {
+  const colonCount = (display.match(/:/g) ?? []).length
+  return colonCount === 1 ? `00:${display}` : display
 }
 
 function saveButtonStyle(isDirty: boolean): React.CSSProperties {
@@ -187,14 +199,14 @@ export default function TrackProofreadingPage() {
                 />
                 <input
                   aria-label={`Sentence ${sentence.index} start time`}
-                  value={sentence.startTime}
-                  onChange={(e) => updateLocalField(sentence.id, 'startTime', e.target.value)}
+                  value={toDisplayTime(sentence.startTime)}
+                  onChange={(e) => updateLocalField(sentence.id, 'startTime', toStoredTime(e.target.value))}
                   style={timeInputStyle(dirty)}
                 />
                 <input
                   aria-label={`Sentence ${sentence.index} end time`}
-                  value={sentence.endTime}
-                  onChange={(e) => updateLocalField(sentence.id, 'endTime', e.target.value)}
+                  value={toDisplayTime(sentence.endTime)}
+                  onChange={(e) => updateLocalField(sentence.id, 'endTime', toStoredTime(e.target.value))}
                   style={timeInputStyle(dirty)}
                 />
                 <button onClick={() => saveSentence(sentence)} disabled={savingId === sentence.id} style={saveButtonStyle(dirty)}>

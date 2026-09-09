@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { ConfirmDeleteByNameModal } from '../ConfirmDeleteByNameModal'
 
 type Exercise = {
   id: string
@@ -200,6 +201,18 @@ function PencilIcon() {
   )
 }
 
+function TrashIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--error)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 6h18" />
+      <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+      <path d="M10 11v6" />
+      <path d="M14 11v6" />
+    </svg>
+  )
+}
+
 function BookIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -320,6 +333,9 @@ export default function ExercisesAdminPage() {
   const [form, setForm] = useState<ExerciseFormValues>({ title: '', description: '', coverImageUrl: '', order: '1' })
   const [formError, setFormError] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
+  const [deletingExercise, setDeletingExercise] = useState<Exercise | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   async function loadExercises() {
     const response = await fetch('/api/admin/exercises')
@@ -386,6 +402,20 @@ export default function ExercisesAdminPage() {
     await loadExercises()
   }
 
+  async function handleDelete() {
+    if (!deletingExercise) return
+    setIsDeleting(true)
+    setDeleteError(null)
+    const response = await fetch(`/api/admin/exercises/${deletingExercise.id}`, { method: 'DELETE' })
+    setIsDeleting(false)
+    if (!response.ok) {
+      setDeleteError('Failed to delete exercise')
+      return
+    }
+    setDeletingExercise(null)
+    await loadExercises()
+  }
+
   return (
     <main style={{ padding: '24px 40px 40px', display: 'flex', flexDirection: 'column', gap: 24 }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
@@ -440,6 +470,16 @@ export default function ExercisesAdminPage() {
                 <button aria-label={`Edit ${exercise.title}`} onClick={() => openEditModal(exercise)} style={iconButtonStyle}>
                   <PencilIcon />
                 </button>
+                <button
+                  aria-label={`Delete ${exercise.title}`}
+                  onClick={() => {
+                    setDeleteError(null)
+                    setDeletingExercise(exercise)
+                  }}
+                  style={iconButtonStyle}
+                >
+                  <TrashIcon />
+                </button>
               </div>
             </div>
           ))}
@@ -455,6 +495,20 @@ export default function ExercisesAdminPage() {
           onClose={() => setModal(null)}
           error={formError}
           isSaving={isSaving}
+        />
+      )}
+
+      {deletingExercise && (
+        <ConfirmDeleteByNameModal
+          kind="exercise"
+          name={deletingExercise.title}
+          onCancel={() => {
+            setDeletingExercise(null)
+            setDeleteError(null)
+          }}
+          onConfirm={handleDelete}
+          error={deleteError}
+          isDeleting={isDeleting}
         />
       )}
     </main>

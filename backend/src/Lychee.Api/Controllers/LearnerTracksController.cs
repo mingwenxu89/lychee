@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Lychee.Api.Controllers;
 
-public record LearnerSentenceResponse(Guid Id, int Index, string Text, TimeSpan StartTime, TimeSpan EndTime, bool IsFavorited);
+public record LearnerSentenceResponse(Guid Id, int Index, string Text, TimeSpan StartTime, TimeSpan EndTime);
 
 public record LearnerTrackResponse(
     Guid Id, Guid UnitId, Guid ExerciseId, string Title, string? Description, string ExerciseTitle, string Level,
@@ -39,27 +39,22 @@ public class LearnerTracksController : ControllerBase
 
         var siblingTracks = await _db.Tracks
             .Where(t => t.Unit.ExerciseId == track.Unit.ExerciseId)
-            .Select(t => new { t.Id, t.UnitId, UnitOrder = t.Unit.Order, t.CreatedAt })
+            .Select(t => new { t.Id, t.UnitId, UnitOrder = t.Unit.Order, t.Order })
             .ToListAsync();
 
         var nextTrackId = NextTrackResolver.FindNextTrackId(
             id,
-            siblingTracks.Select(t => (t.UnitId, t.UnitOrder, t.Id, t.CreatedAt)).ToList());
+            siblingTracks.Select(t => (t.UnitId, t.UnitOrder, t.Id, t.Order)).ToList());
 
         var audioParts = track.AudioFileUrl.Split('/', 2);
         var audioUrl = await _blobStorageService.GetReadUrlAsync(audioParts[0], audioParts[1], TimeSpan.FromHours(2));
 
         var userId = User.GetUserId();
         var isTrackFavorited = await _db.TrackFavorites.AnyAsync(f => f.UserId == userId && f.TrackId == track.Id);
-        var favoritedSentenceIds = await _db.SentenceFavorites
-            .Where(f => f.UserId == userId && f.Sentence.TrackId == track.Id)
-            .Select(f => f.SentenceId)
-            .ToListAsync();
-        var favoritedSentenceIdSet = favoritedSentenceIds.ToHashSet();
 
         var sentences = track.Sentences
             .OrderBy(s => s.Index)
-            .Select(s => new LearnerSentenceResponse(s.Id, s.Index, s.Text, s.StartTime, s.EndTime, favoritedSentenceIdSet.Contains(s.Id)))
+            .Select(s => new LearnerSentenceResponse(s.Id, s.Index, s.Text, s.StartTime, s.EndTime))
             .ToList();
 
         return Ok(new LearnerTrackResponse(

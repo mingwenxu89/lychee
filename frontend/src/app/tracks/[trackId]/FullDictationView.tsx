@@ -74,6 +74,50 @@ const resultCorrectColor = 'oklch(38% 0.13 145)'
 // came from Full Dictation or Recite: a neutral hueless gray behind the per-sentence review list.
 const resultPanelBg = 'oklch(96% 0 0)'
 
+// Matches SentencePracticeView's shortcuts-modal styling exactly.
+const overlayStyle: React.CSSProperties = {
+  position: 'fixed',
+  inset: 0,
+  background: 'oklch(22% 0.03 270 / 0.55)',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  zIndex: 10
+}
+
+const modalStyle: React.CSSProperties = {
+  width: 420,
+  maxWidth: '92vw',
+  background: 'var(--surface)',
+  borderRadius: 28,
+  boxShadow: 'none',
+  padding: '32px 36px',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 18
+}
+
+const keyBadgeStyle: React.CSSProperties = {
+  background: 'oklch(96% 0.01 80)',
+  border: '1px solid var(--line)',
+  borderRadius: 8,
+  padding: '4px 10px',
+  fontWeight: 800,
+  fontSize: 13,
+  color: 'var(--ink-soft)',
+  fontFamily: 'inherit',
+  whiteSpace: 'nowrap'
+}
+
+// Full Dictation's actual shortcut set — no Previous/Next sentence or Skip shortcuts here (there's
+// no sentence-navigation control), unlike SentencePracticeView's fuller list.
+const SHORTCUTS: { keys: string; description: string }[] = [
+  { keys: 'Enter', description: 'Next' },
+  { keys: 'Ctrl', description: 'Play / Pause' },
+  { keys: 'Ctrl + /', description: 'Reset' },
+  { keys: 'Ctrl + M', description: 'Toggle microphone' }
+]
+
 // Shared by the round-choice and final-summary screens (see their render sites) so both present
 // the score identically — an icon+title on the left, sentence count and score badge on the right.
 function ResultHeader({ title, correctCount, total, score }: { title: string; correctCount: number; total: number; score: number }) {
@@ -149,6 +193,7 @@ export function FullDictationView({
   const [summary, setSummary] = useState<SummaryState | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [showShortcuts, setShowShortcuts] = useState(false)
   // A running, cross-round log of every sentence the learner has moved past, newest last — the
   // UI shows only the trailing slice of this so the learner can scroll back through the last few
   // sentences and get a sense of the passage as a whole. Holds what they actually typed, not the
@@ -159,9 +204,12 @@ export function FullDictationView({
   // preview the upcoming sentence's prior answer below the textarea. Also what a resumed session
   // is rebuilt from, alongside correctSentenceIds.
   const [previousRoundAnswers, setPreviousRoundAnswers] = useState<Map<string, string>>(new Map())
-  const [favoritedSentenceIds, setFavoritedSentenceIds] = useState(
-    () => new Set(track.sentences.filter((s) => s.isFavorited).map((s) => s.id))
-  )
+  // Which sentence is currently playing on a result screen (Round Complete / Full Dictation
+  // Complete), for highlighting its row — null the rest of the time. Mirrored into a ref since
+  // playResultSentence's own event-listener closures need the current value without re-binding.
+  const [playingResultSentenceId, setPlayingResultSentenceId] = useState<string | null>(null)
+  const playingResultSentenceIdRef = useRef<string | null>(null)
+  const resultTimeUpdateCleanupRef = useRef<(() => void) | null>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const historyEndRef = useRef<HTMLDivElement>(null)
@@ -348,7 +396,7 @@ export function FullDictationView({
   // bare Control keydown first. Gated to only fire while a step is actually active (nothing to
   // act on otherwise).
   useEffect(() => {
-    if (!currentStep) return
+    if (!currentStep || showShortcuts) return
 
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === 'Control') {
@@ -380,7 +428,7 @@ export function FullDictationView({
       window.removeEventListener('keyup', handleKeyUp)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentStep, isRecording, answer])
+  }, [currentStep, isRecording, answer, showShortcuts])
 
   // Shared POST helper for /complete: checks response.ok and catches a network-level rejection
   // (not just a non-ok response), reporting either the same way via actionError instead of
@@ -554,29 +602,6 @@ export function FullDictationView({
     audio.play()
   }
 
-  // Matches SentencePracticeView's favorite toggle exactly, applied to whichever sentence is
-  // currently active.
-  async function handleToggleSentenceFavorite() {
-    if (!currentSentence) return
-    const sentenceId = currentSentence.id
-    const isFavorited = favoritedSentenceIds.has(sentenceId)
-    setFavoritedSentenceIds((prev) => {
-      const next = new Set(prev)
-      if (isFavorited) next.delete(sentenceId)
-      else next.add(sentenceId)
-      return next
-    })
-    const response = await fetch(`/api/learner/sentences/${sentenceId}/favorite`, { method: isFavorited ? 'DELETE' : 'PUT' })
-    if (!response.ok) {
-      setFavoritedSentenceIds((prev) => {
-        const next = new Set(prev)
-        if (isFavorited) next.add(sentenceId)
-        else next.delete(sentenceId)
-        return next
-      })
-    }
-  }
-
   // Mirrors SentencePracticeView's mic handling exactly: a continuous recognizer that appends
   // onto whatever was already typed (captured once into baseAnswerRef when recording starts)
   // rather than replacing it, so switching between typing and speaking mid-sentence doesn't
@@ -602,11 +627,50 @@ export function FullDictationView({
     textareaRef.current?.focus()
   }
 
+  // Used only on the result screens (Round Complete / Full Dictation Complete): plays exactly one
+  // sentence and stops at its end, with no auto-advance to the next one — unlike the active-
+  // dictation playback effect above, there is no "current step" here to move on to. Clicking the
+  // row that's already playing pauses it instead of restarting it; clicking a different row while
+  // one is playing tears down that row's own end-of-sentence listener first, so it can't fire late
+  // and cut off the newly selected sentence.
+  function playResultSentence(sentence: { id: string; startTime: string; endTime: string }) {
+    const audio = audioRef.current
+    if (!audio) return
+
+    if (playingResultSentenceIdRef.current === sentence.id) {
+      stopPlayingResultSentence()
+      return
+    }
+    stopPlayingResultSentence()
+
+    const end = parseTimeSpanToSeconds(sentence.endTime)
+    audio.currentTime = parseTimeSpanToSeconds(sentence.startTime)
+    setPlayingResultSentenceId(sentence.id)
+    playingResultSentenceIdRef.current = sentence.id
+
+    function onTimeUpdate() {
+      if (audio!.currentTime >= end) stopPlayingResultSentence()
+    }
+    audio.addEventListener('timeupdate', onTimeUpdate)
+    resultTimeUpdateCleanupRef.current = () => audio.removeEventListener('timeupdate', onTimeUpdate)
+    audio.play()
+  }
+
+  function stopPlayingResultSentence() {
+    if (playingResultSentenceIdRef.current === null) return
+    audioRef.current?.pause()
+    resultTimeUpdateCleanupRef.current?.()
+    resultTimeUpdateCleanupRef.current = null
+    playingResultSentenceIdRef.current = null
+    setPlayingResultSentenceId(null)
+  }
+
   if (error) return <p role="alert" style={{ color: 'var(--error)', fontWeight: 700 }}>{error}</p>
 
   if (summary) {
     return (
       <div style={{ ...cardStyle, padding: 26, display: 'flex', flexDirection: 'column', gap: 20, width: 760, maxWidth: '100%' }}>
+        <audio ref={audioRef} src={audioObjectUrl ?? undefined} />
         <ResultHeader
           title="Full Dictation Complete"
           correctCount={summary.finalCorrectSentenceIds.length}
@@ -622,11 +686,43 @@ export function FullDictationView({
             // ones in pink, pure color differentiation with no checkmark needed.
             const { words } = compare(s.text, previousRoundAnswers.get(s.id) ?? '')
             return (
-              <div key={s.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+              <div
+                key={s.id}
+                onClick={() => playResultSentence(s)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: 8,
+                  padding: '4px 8px',
+                  margin: '-4px -8px',
+                  borderRadius: 10,
+                  cursor: 'pointer',
+                  background: playingResultSentenceId === s.id ? 'var(--primary-soft)' : 'transparent'
+                }}
+              >
                 <span style={{ fontWeight: 800, fontSize: 13, lineHeight: '30.6px', width: 22, flexShrink: 0, color: 'var(--ink-faint)' }}>{i + 1}</span>
-                <span style={{ fontSize: 17, lineHeight: 1.8, fontWeight: 400 }}>
+                <span style={{ fontSize: 17, lineHeight: 1.8, fontWeight: 400, flex: 1 }}>
                   <DiffText words={words} variant="dictation" correctColor={resultCorrectColor} incorrectColor="var(--primary)" />
                 </span>
+                <button
+                  onClick={(e) => { e.stopPropagation(); playResultSentence(s) }}
+                  aria-label={`Play sentence ${i + 1}`}
+                  style={{
+                    marginTop: 4,
+                    flexShrink: 0,
+                    width: 24,
+                    height: 24,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    background: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: 0
+                  }}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="var(--primary)"><path d="M8 5v14l11-7z" /></svg>
+                </button>
               </div>
             )
           })}
@@ -719,8 +815,7 @@ export function FullDictationView({
     </button>
   ) : null
 
-  // Matches SentencePracticeView's Reset button exactly, placed to the left of the mic — same
-  // as that view's row (favorite, Reset, mic) now reads.
+  // Matches SentencePracticeView's Reset button exactly, placed to the left of the mic.
   const resetButton = (
     <button
       onClick={handleReset}
@@ -744,28 +839,6 @@ export function FullDictationView({
       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--ink-soft)" strokeWidth="2.5">
         <path d="M3 12a9 9 0 1 0 3-6.7" strokeLinecap="round" />
         <path d="M3 4v5h5" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-    </button>
-  )
-
-  // Matches SentencePracticeView's favorite button exactly.
-  const favoriteButton = (
-    <button
-      onClick={handleToggleSentenceFavorite}
-      disabled={!currentSentence}
-      aria-label={currentSentence && favoritedSentenceIds.has(currentSentence.id) ? 'Remove sentence from favorites' : 'Add sentence to favorites'}
-      aria-pressed={currentSentence ? favoritedSentenceIds.has(currentSentence.id) : false}
-      style={{ background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', flexShrink: 0 }}
-    >
-      <svg
-        width="18"
-        height="18"
-        viewBox="0 0 24 24"
-        fill={currentSentence && favoritedSentenceIds.has(currentSentence.id) ? 'var(--primary)' : 'none'}
-        stroke={currentSentence && favoritedSentenceIds.has(currentSentence.id) ? 'var(--primary)' : 'var(--ink-faint)'}
-        strokeWidth="2"
-      >
-        <path d="M12 21s-6.7-4.35-9.3-8.28C1.02 10.4 1.5 6.9 4.3 5.3a5 5 0 0 1 7 1.2 5 5 0 0 1 7-1.2c2.8 1.6 3.28 5.1 1.6 7.42C18.7 16.65 12 21 12 21z" strokeLinejoin="round" />
       </svg>
     </button>
   )
@@ -853,11 +926,43 @@ export function FullDictationView({
                 {track.sentences.map((s, i) => {
                   const { words } = compare(s.text, previousRoundAnswers.get(s.id) ?? '')
                   return (
-                    <div key={s.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                    <div
+                      key={s.id}
+                      onClick={() => playResultSentence(s)}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: 8,
+                        padding: '4px 8px',
+                        margin: '-4px -8px',
+                        borderRadius: 10,
+                        cursor: 'pointer',
+                        background: playingResultSentenceId === s.id ? 'var(--primary-soft)' : 'transparent'
+                      }}
+                    >
                       <span style={{ fontWeight: 800, fontSize: 13, lineHeight: '30.6px', width: 22, flexShrink: 0, color: 'var(--ink-faint)' }}>{i + 1}</span>
-                      <span style={{ fontSize: 17, lineHeight: 1.8, fontWeight: 400 }}>
+                      <span style={{ fontSize: 17, lineHeight: 1.8, fontWeight: 400, flex: 1 }}>
                         <DiffText words={words} variant="dictation" correctColor={resultCorrectColor} incorrectColor="var(--primary)" />
                       </span>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); playResultSentence(s) }}
+                        aria-label={`Play sentence ${i + 1}`}
+                        style={{
+                          marginTop: 4,
+                          flexShrink: 0,
+                          width: 24,
+                          height: 24,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          background: 'transparent',
+                          border: 'none',
+                          cursor: 'pointer',
+                          padding: 0
+                        }}
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="var(--primary)"><path d="M8 5v14l11-7z" /></svg>
+                      </button>
                     </div>
                   )
                 })}
@@ -890,6 +995,7 @@ export function FullDictationView({
                   onClick={handlePlayPauseClick}
                   disabled={!currentSentence}
                   aria-label={isPlaying ? 'Pause' : 'Play'}
+                  title={isPlaying ? 'Pause (Ctrl)' : 'Play (Ctrl)'}
                   style={{
                     width: 52,
                     height: 52,
@@ -923,6 +1029,28 @@ export function FullDictationView({
                   {formatTime(elapsedInSentence)} / {formatTime(sentenceDuration)}
                 </span>
               </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, margin: '-8px 0' }}>
+                <span style={{ fontSize: 12, color: 'var(--ink-faint)', fontWeight: 600 }}>
+                  Press &quot;Ctrl&quot; to play or pause.
+                </span>
+                <button
+                  onClick={() => setShowShortcuts(true)}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    padding: 0,
+                    fontSize: 12,
+                    fontWeight: 700,
+                    color: 'var(--ink-faint)',
+                    cursor: 'pointer',
+                    textDecoration: 'underline'
+                  }}
+                >
+                  View other shortcuts
+                </button>
+              </div>
+
               {currentStep && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {historyFeed}
@@ -957,7 +1085,6 @@ export function FullDictationView({
                       Next
                     </button>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      {favoriteButton}
                       {resetButton}
                       {micButton}
                     </div>
@@ -975,6 +1102,31 @@ export function FullDictationView({
       </div>
 
       {progressPanel}
+
+      {showShortcuts && (
+        <div style={overlayStyle} onClick={() => setShowShortcuts(false)}>
+          <div style={modalStyle} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>Keyboard Shortcuts</h2>
+              <button
+                onClick={() => setShowShortcuts(false)}
+                aria-label="Close"
+                style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 20, color: 'var(--ink-faint)', lineHeight: 1 }}
+              >
+                ✕
+              </button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {SHORTCUTS.map((s) => (
+                <div key={s.keys} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+                  <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink-soft)' }}>{s.description}</span>
+                  <span style={keyBadgeStyle}>{s.keys}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

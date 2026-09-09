@@ -103,7 +103,7 @@ public class LearnerExercisesController : ControllerBase
             .OrderBy(u => u.Order)
             .Select(u => new LearnerExerciseUnitResponse(
                 u.Id, u.Title, u.Order,
-                u.Tracks.OrderBy(t => t.CreatedAt).Select(t => new LearnerExerciseTrackResponse(
+                u.Tracks.OrderBy(t => t.Order).Select(t => new LearnerExerciseTrackResponse(
                     t.Id, t.Title, t.Description, t.Level, t.Duration,
                     t.Sentences.Count, TrackMetrics.ComputeWordsPerMinute(t), completedSet.Contains(t.Id))).ToList()))
             .ToList();

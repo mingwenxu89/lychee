@@ -113,4 +113,38 @@ describe('textComparer', () => {
     expect(countWords('I saw the first snowfall.')).toBe(5)
     expect(countWords('')).toBe(0)
   })
+
+  it('treats a hyphenated compound as an exact match against the same words with a space', () => {
+    const result = compare('a four-day trip', 'a four day trip')
+
+    expect(result.isExactMatch).toBe(true)
+    expect(result.accuracyScore).toBe(1.0)
+  })
+
+  it.each([
+    ['She is ten years old', 'She is 10 years old'],
+    ['I have 10 dollars', 'I have ten dollars'],
+    ['We waited twenty one minutes', 'We waited 21 minutes'],
+    ['We waited 21 minutes', 'We waited twenty-one minutes'],
+    ['It cost one hundred dollars', 'It cost 100 dollars'],
+    ['There were two hundred and five people', 'There were 205 people']
+  ])('treats number word %j / %j as an exact match', (reference, submitted) => {
+    const result = compare(reference, submitted)
+
+    expect(result.isExactMatch).toBe(true)
+    expect(result.accuracyScore).toBe(1.0)
+  })
+
+  it('still marks a genuinely different number as incorrect', () => {
+    const result = compare('I have ten dollars', 'I have 11 dollars')
+
+    expect(result.isExactMatch).toBe(false)
+    expect(result.words.some((w) => w.status === 'Incorrect' && w.word === 'ten')).toBe(true)
+  })
+
+  it('merging a number-word run does not change the reference word\'s displayed text', () => {
+    const result = compare('We waited twenty one minutes', 'We waited 21 minutes')
+
+    expect(result.words.some((w) => w.word === 'twenty one')).toBe(true)
+  })
 })

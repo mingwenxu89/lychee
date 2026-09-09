@@ -38,8 +38,7 @@ public class LearnerFavoritesControllerTests : IClassFixture<LycheeWebApplicatio
         return client;
     }
 
-    private static async Task<(Guid TrackId, Guid SentenceId, Guid ExerciseId)> CreateTrackAsync(
-        HttpClient adminClient, string sentenceText = "Hello there.")
+    private static async Task<Guid> CreateTrackAsync(HttpClient adminClient, string sentenceText = "Hello there.")
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         var exerciseResponse = await adminClient.PostAsJsonAsync("/api/admin/exercises",
@@ -60,17 +59,14 @@ public class LearnerFavoritesControllerTests : IClassFixture<LycheeWebApplicatio
         var trackResponse = await adminClient.PostAsync($"/api/admin/units/{unit!.Id}/tracks", form);
         var track = await trackResponse.Content.ReadFromJsonAsync<IdOnly>();
 
-        var sentencesResponse = await adminClient.GetAsync($"/api/admin/tracks/{track!.Id}/sentences");
-        var sentences = await sentencesResponse.Content.ReadFromJsonAsync<List<IdOnly>>();
-
-        return (track.Id, sentences![0].Id, exercise.Id);
+        return track!.Id;
     }
 
     [Fact]
     public async Task FavoriteTrack_ThenUnfavorite_TogglesCorrectlyAndIsIdempotent()
     {
         var admin = AdminClient();
-        var (trackId, _, _) = await CreateTrackAsync(admin);
+        var trackId = await CreateTrackAsync(admin);
         var learner = await LearnerClientAsync();
 
         var favoriteOnce = await learner.PutAsync($"/api/learner/tracks/{trackId}/favorite", null);
@@ -79,8 +75,8 @@ public class LearnerFavoritesControllerTests : IClassFixture<LycheeWebApplicatio
         Assert.Equal(HttpStatusCode.NoContent, favoriteTwice.StatusCode);
 
         var listResponse = await learner.GetAsync("/api/learner/favorites/tracks");
-        var list = await listResponse.Content.ReadFromJsonAsync<List<FavoriteTrackResponse>>();
-        Assert.Contains(list!, t => t.Id == trackId);
+        var list = await listResponse.Content.ReadFromJsonAsync<PagedResponse<FavoriteTrackResponse>>();
+        Assert.Contains(list!.Items, t => t.Id == trackId);
 
         var trackDetail = await (await learner.GetAsync($"/api/learner/tracks/{trackId}")).Content.ReadFromJsonAsync<LearnerTrackResponse>();
         Assert.True(trackDetail!.IsFavorited);
@@ -90,70 +86,58 @@ public class LearnerFavoritesControllerTests : IClassFixture<LycheeWebApplicatio
         var unfavoriteTwice = await learner.DeleteAsync($"/api/learner/tracks/{trackId}/favorite");
         Assert.Equal(HttpStatusCode.NoContent, unfavoriteTwice.StatusCode);
 
-        var listAfter = await (await learner.GetAsync("/api/learner/favorites/tracks")).Content.ReadFromJsonAsync<List<FavoriteTrackResponse>>();
-        Assert.DoesNotContain(listAfter!, t => t.Id == trackId);
-    }
-
-    [Fact]
-    public async Task FavoriteSentence_ThenUnfavorite_TogglesCorrectlyAndIsIdempotent()
-    {
-        var admin = AdminClient();
-        var (trackId, sentenceId, exerciseId) = await CreateTrackAsync(admin, "A gentle sentence.");
-        var learner = await LearnerClientAsync();
-
-        var favoriteOnce = await learner.PutAsync($"/api/learner/sentences/{sentenceId}/favorite", null);
-        Assert.Equal(HttpStatusCode.NoContent, favoriteOnce.StatusCode);
-        var favoriteTwice = await learner.PutAsync($"/api/learner/sentences/{sentenceId}/favorite", null);
-        Assert.Equal(HttpStatusCode.NoContent, favoriteTwice.StatusCode);
-
-        var listResponse = await learner.GetAsync("/api/learner/favorites/sentences");
-        var list = await listResponse.Content.ReadFromJsonAsync<List<FavoriteSentenceResponse>>();
-        var favorited = Assert.Single(list!, s => s.Id == sentenceId);
-        Assert.Equal("A gentle sentence.", favorited.Text);
-        Assert.Equal(trackId, favorited.TrackId);
-        Assert.Equal("Test Track", favorited.TrackTitle);
-        Assert.False(string.IsNullOrEmpty(favorited.AudioUrl));
-
-        var trackDetail = await (await learner.GetAsync($"/api/learner/tracks/{trackId}")).Content.ReadFromJsonAsync<LearnerTrackResponse>();
-        Assert.True(trackDetail!.Sentences.Single(s => s.Id == sentenceId).IsFavorited);
-
-        var unfavoriteOnce = await learner.DeleteAsync($"/api/learner/sentences/{sentenceId}/favorite");
-        Assert.Equal(HttpStatusCode.NoContent, unfavoriteOnce.StatusCode);
-        var unfavoriteTwice = await learner.DeleteAsync($"/api/learner/sentences/{sentenceId}/favorite");
-        Assert.Equal(HttpStatusCode.NoContent, unfavoriteTwice.StatusCode);
-
-        var listAfter = await (await learner.GetAsync("/api/learner/favorites/sentences")).Content.ReadFromJsonAsync<List<FavoriteSentenceResponse>>();
-        Assert.DoesNotContain(listAfter!, s => s.Id == sentenceId);
+        var listAfter = await (await learner.GetAsync("/api/learner/favorites/tracks")).Content.ReadFromJsonAsync<PagedResponse<FavoriteTrackResponse>>();
+        Assert.DoesNotContain(listAfter!.Items, t => t.Id == trackId);
     }
 
     [Fact]
     public async Task ListFavoriteTracks_OrderedByMostRecentlyFavoritedFirst()
     {
         var admin = AdminClient();
-        var (firstTrackId, _, _) = await CreateTrackAsync(admin, "First.");
-        var (secondTrackId, _, _) = await CreateTrackAsync(admin, "Second.");
+        var firstTrackId = await CreateTrackAsync(admin, "First.");
+        var secondTrackId = await CreateTrackAsync(admin, "Second.");
         var learner = await LearnerClientAsync();
 
         await learner.PutAsync($"/api/learner/tracks/{firstTrackId}/favorite", null);
         await learner.PutAsync($"/api/learner/tracks/{secondTrackId}/favorite", null);
 
-        var list = await (await learner.GetAsync("/api/learner/favorites/tracks")).Content.ReadFromJsonAsync<List<FavoriteTrackResponse>>();
-        Assert.Equal(secondTrackId, list![0].Id);
-        Assert.Equal(firstTrackId, list[1].Id);
+        var list = await (await learner.GetAsync("/api/learner/favorites/tracks")).Content.ReadFromJsonAsync<PagedResponse<FavoriteTrackResponse>>();
+        Assert.Equal(secondTrackId, list!.Items[0].Id);
+        Assert.Equal(firstTrackId, list.Items[1].Id);
+    }
+
+    [Fact]
+    public async Task ListFavoriteTracks_RespectsPageAndPageSize()
+    {
+        var admin = AdminClient();
+        var firstTrackId = await CreateTrackAsync(admin, "First.");
+        var secondTrackId = await CreateTrackAsync(admin, "Second.");
+        var thirdTrackId = await CreateTrackAsync(admin, "Third.");
+        var learner = await LearnerClientAsync();
+
+        await learner.PutAsync($"/api/learner/tracks/{firstTrackId}/favorite", null);
+        await learner.PutAsync($"/api/learner/tracks/{secondTrackId}/favorite", null);
+        await learner.PutAsync($"/api/learner/tracks/{thirdTrackId}/favorite", null);
+
+        var page1 = await (await learner.GetAsync("/api/learner/favorites/tracks?page=1&pageSize=2"))
+            .Content.ReadFromJsonAsync<PagedResponse<FavoriteTrackResponse>>();
+        var page2 = await (await learner.GetAsync("/api/learner/favorites/tracks?page=2&pageSize=2"))
+            .Content.ReadFromJsonAsync<PagedResponse<FavoriteTrackResponse>>();
+
+        Assert.Equal(3, page1!.TotalCount);
+        Assert.Equal(2, page1.Items.Count);
+        Assert.Equal(thirdTrackId, page1.Items[0].Id);
+        Assert.Equal(secondTrackId, page1.Items[1].Id);
+
+        Assert.Equal(3, page2!.TotalCount);
+        Assert.Single(page2.Items);
+        Assert.Equal(firstTrackId, page2.Items[0].Id);
     }
 
     [Fact]
     public async Task FavoriteTrack_NonExistentTrack_Returns404()
     {
         var response = await (await LearnerClientAsync()).PutAsync($"/api/learner/tracks/{Guid.NewGuid()}/favorite", null);
-
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task FavoriteSentence_NonExistentSentence_Returns404()
-    {
-        var response = await (await LearnerClientAsync()).PutAsync($"/api/learner/sentences/{Guid.NewGuid()}/favorite", null);
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }

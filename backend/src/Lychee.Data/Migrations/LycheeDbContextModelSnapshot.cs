@@ -301,24 +301,6 @@ namespace Lychee.Data.Migrations
                     b.ToTable("Sentences");
                 });
 
-            modelBuilder.Entity("Lychee.Data.Entities.SentenceFavorite", b =>
-                {
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("SentenceId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("UserId", "SentenceId");
-
-                    b.HasIndex("SentenceId");
-
-                    b.ToTable("SentenceFavorites");
-                });
-
             modelBuilder.Entity("Lychee.Data.Entities.Track", b =>
                 {
                     b.Property<Guid>("Id")
@@ -348,6 +330,9 @@ namespace Lychee.Data.Migrations
                     b.Property<string>("Level")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("integer");
 
                     b.Property<string>("SrtFileUrl")
                         .IsRequired()
@@ -630,25 +615,6 @@ namespace Lychee.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Track");
-                });
-
-            modelBuilder.Entity("Lychee.Data.Entities.SentenceFavorite", b =>
-                {
-                    b.HasOne("Lychee.Data.Entities.Sentence", "Sentence")
-                        .WithMany()
-                        .HasForeignKey("SentenceId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("Lychee.Data.Entities.ApplicationUser", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Sentence");
-
-                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("Lychee.Data.Entities.Track", b =>

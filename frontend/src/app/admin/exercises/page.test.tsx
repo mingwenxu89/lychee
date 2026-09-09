@@ -111,10 +111,47 @@ describe('ExercisesAdminPage', () => {
     expect(await screen.findByText('Published')).toBeInTheDocument()
   })
 
-  it('does not show a delete action', async () => {
+  it('requires typing the exact exercise title before Delete is enabled, then deletes it', async () => {
     render(<ExercisesAdminPage />)
     await screen.findByText('The Lighthouse Keeper\'s Daughter')
 
-    expect(screen.queryByRole('button', { name: /delete/i })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /delete the lighthouse keeper's daughter/i }))
+    expect(screen.getByText('Delete this exercise?')).toBeInTheDocument()
+
+    const deleteButton = screen.getByRole('button', { name: /^delete$/i })
+    expect(deleteButton).toBeDisabled()
+
+    fireEvent.change(screen.getByLabelText(/type ".*" to confirm/i), { target: { value: 'wrong name' } })
+    expect(deleteButton).toBeDisabled()
+
+    fireEvent.change(screen.getByLabelText(/type ".*" to confirm/i), { target: { value: 'The Lighthouse Keeper\'s Daughter' } })
+    expect(deleteButton).not.toBeDisabled()
+
+    mockFetchOnce(undefined, 204)
+    mockFetchOnce([])
+
+    fireEvent.click(deleteButton)
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith('/api/admin/exercises/exercise-1', { method: 'DELETE' })
+    })
+    await waitFor(() => {
+      expect(screen.queryByText('The Lighthouse Keeper\'s Daughter')).not.toBeInTheDocument()
+    })
+  })
+
+  it('shows an error and keeps the exercise if deletion fails', async () => {
+    render(<ExercisesAdminPage />)
+    await screen.findByText('The Lighthouse Keeper\'s Daughter')
+
+    fireEvent.click(screen.getByRole('button', { name: /delete the lighthouse keeper's daughter/i }))
+    fireEvent.change(screen.getByLabelText(/type ".*" to confirm/i), { target: { value: 'The Lighthouse Keeper\'s Daughter' } })
+
+    mockFetchOnce(undefined, 500)
+
+    fireEvent.click(screen.getByRole('button', { name: /^delete$/i }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Failed to delete exercise')
+    expect(screen.getByText('The Lighthouse Keeper\'s Daughter')).toBeInTheDocument()
   })
 })

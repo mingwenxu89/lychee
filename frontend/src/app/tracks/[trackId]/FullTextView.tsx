@@ -34,13 +34,11 @@ function formatTime(seconds: number): string {
 
 export function FullTextView({
   track,
-  initialSentenceIndex,
   onStartFullDictation,
   onStartBySentence,
   onStartRecite
 }: {
   track: LearnerTrack
-  initialSentenceIndex?: number | null
   onStartFullDictation: () => void
   onStartBySentence: () => void
   onStartRecite: () => void
@@ -53,44 +51,10 @@ export function FullTextView({
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
   const [isPlaying, setIsPlaying] = useState(false)
-  const [favoritedSentenceIds, setFavoritedSentenceIds] = useState(
-    () => new Set(track.sentences.filter((s) => s.isFavorited).map((s) => s.id))
-  )
 
   useEffect(() => {
     if (showText) sentenceRefs.current[activeIndex]?.scrollIntoView({ block: 'center', behavior: 'smooth' })
   }, [activeIndex, showText])
-
-  // Arriving from a favorited-sentence link: jump the audio to that sentence's position and
-  // reveal the text so it's visible in context, without forcing playback to start.
-  useEffect(() => {
-    if (initialSentenceIndex === null || initialSentenceIndex === undefined) return
-    const position = track.sentences.findIndex((s) => s.index === initialSentenceIndex)
-    if (position === -1 || !audioRef.current) return
-    audioRef.current.currentTime = parseTimeSpanToSeconds(track.sentences[position].startTime)
-    setActiveIndex(position)
-    setShowText(true)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  async function handleToggleSentenceFavorite(sentenceId: string) {
-    const isFavorited = favoritedSentenceIds.has(sentenceId)
-    setFavoritedSentenceIds((prev) => {
-      const next = new Set(prev)
-      if (isFavorited) next.delete(sentenceId)
-      else next.add(sentenceId)
-      return next
-    })
-    const response = await fetch(`/api/learner/sentences/${sentenceId}/favorite`, { method: isFavorited ? 'DELETE' : 'PUT' })
-    if (!response.ok) {
-      setFavoritedSentenceIds((prev) => {
-        const next = new Set(prev)
-        if (isFavorited) next.add(sentenceId)
-        else next.delete(sentenceId)
-        return next
-      })
-    }
-  }
 
   useEffect(() => {
     const audio = audioRef.current
@@ -270,13 +234,15 @@ export function FullTextView({
                 <li
                   key={s.id}
                   ref={(el) => { sentenceRefs.current[i] = el }}
+                  onClick={() => seekTo(i)}
                   style={{
                     display: 'flex',
                     alignItems: 'flex-start',
                     gap: 14,
                     padding: '12px 16px',
                     borderRadius: 14,
-                    background: isActive ? 'var(--primary-soft)' : 'transparent'
+                    background: isActive ? 'var(--primary-soft)' : 'transparent',
+                    cursor: 'pointer'
                   }}
                 >
                   {/* lineHeight is set in px, matching the sentence text's own line-box height
@@ -297,31 +263,10 @@ export function FullTextView({
                     {s.text}
                   </span>
                   <button
-                    onClick={(e) => { e.stopPropagation(); handleToggleSentenceFavorite(s.id) }}
-                    aria-label={favoritedSentenceIds.has(s.id) ? `Remove sentence ${i + 1} from favorites` : `Add sentence ${i + 1} to favorites`}
-                    aria-pressed={favoritedSentenceIds.has(s.id)}
-                    style={{
-                      marginLeft: 'auto',
-                      flexShrink: 0,
-                      width: 24,
-                      height: 24,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      background: 'transparent',
-                      border: 'none',
-                      cursor: 'pointer',
-                      padding: 0
-                    }}
-                  >
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill={favoritedSentenceIds.has(s.id) ? 'var(--primary)' : 'none'} stroke={favoritedSentenceIds.has(s.id) ? 'var(--primary)' : 'var(--ink-faint)'} strokeWidth="2">
-                      <path d="M12 21s-6.7-4.35-9.3-8.28C1.02 10.4 1.5 6.9 4.3 5.3a5 5 0 0 1 7 1.2 5 5 0 0 1 7-1.2c2.8 1.6 3.28 5.1 1.6 7.42C18.7 16.65 12 21 12 21z" strokeLinejoin="round" />
-                    </svg>
-                  </button>
-                  <button
                     onClick={(e) => { e.stopPropagation(); seekTo(i) }}
                     aria-label={`Play sentence ${i + 1}`}
                     style={{
+                      marginLeft: 'auto',
                       flexShrink: 0,
                       width: 24,
                       height: 24,
@@ -340,10 +285,6 @@ export function FullTextView({
               )
             })}
           </ol>
-        )}
-
-        {showText && (
-          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 60, background: 'linear-gradient(to bottom, transparent, var(--surface))', pointerEvents: 'none' }} />
         )}
       </div>
     </div>

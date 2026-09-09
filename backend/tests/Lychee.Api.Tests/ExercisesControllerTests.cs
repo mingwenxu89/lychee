@@ -1,8 +1,11 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text;
 using Lychee.Api.Auth;
+using Lychee.Storage;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Lychee.Api.Tests;
@@ -97,18 +100,53 @@ public class ExercisesControllerTests : IClassFixture<LycheeWebApplicationFactor
     }
 
     [Fact]
-    public async Task NoDeleteEndpoint_Exists()
+    public async Task Delete_AnExistingExercise_CascadesToUnitsAndTracksAndDeletesTheirBlobFiles()
     {
         var client = AdminClient();
         var suffix = Guid.NewGuid().ToString("N")[..8];
-        var createResponse = await client.PostAsJsonAsync("/api/admin/exercises",
-            new { title = $"Exercise {suffix}", description = (string?)null, coverImageUrl = (string?)null });
-        var created = await createResponse.Content.ReadFromJsonAsync<ExerciseResponse>();
 
-        var deleteResponse = await client.DeleteAsync($"/api/admin/exercises/{created!.Id}");
+        var exerciseResponse = await client.PostAsJsonAsync("/api/admin/exercises",
+            new { title = $"Exercise {suffix}", description = (string?)null, coverImageUrl = (string?)null, order = 1 });
+        var exercise = await exerciseResponse.Content.ReadFromJsonAsync<ExerciseResponse>();
 
-        Assert.Equal(HttpStatusCode.MethodNotAllowed, deleteResponse.StatusCode);
+        var unitResponse = await client.PostAsJsonAsync($"/api/admin/exercises/{exercise!.Id}/units",
+            new { title = "Unit 1", order = 1 });
+        var unit = await unitResponse.Content.ReadFromJsonAsync<UnitIdOnly>();
+
+        using var form = new MultipartFormDataContent();
+        form.Add(new ByteArrayContent(Encoding.UTF8.GetBytes("audio")), "AudioFile", "a.mp3");
+        form.Add(new StringContent("1\n00:00:00,000 --> 00:00:01,000\nHi.\n"), "SrtFile", "a.srt");
+        form.Add(new StringContent("A1"), "Level");
+        form.Add(new StringContent("Test Track"), "Title");
+        var trackResponse = await client.PostAsync($"/api/admin/units/{unit!.Id}/tracks", form);
+        var track = await trackResponse.Content.ReadFromJsonAsync<TrackIdAndUrls>();
+
+        var storageOptions = _factory.Services.GetRequiredService<IOptions<StorageOptions>>().Value;
+        var audioPath = TestBlobPaths.FromReadUrl(storageOptions, track!.AudioUrl);
+        var srtPath = TestBlobPaths.FromReadUrl(storageOptions, track.SrtUrl);
+        Assert.True(File.Exists(audioPath));
+        Assert.True(File.Exists(srtPath));
+
+        var deleteResponse = await client.DeleteAsync($"/api/admin/exercises/{exercise.Id}");
+        Assert.Equal(HttpStatusCode.NoContent, deleteResponse.StatusCode);
+
+        Assert.False(File.Exists(audioPath));
+        Assert.False(File.Exists(srtPath));
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/api/admin/units/{unit.Id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/api/admin/tracks/{track.Id}")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Delete_NonExistentExercise_Returns404()
+    {
+        var client = AdminClient();
+
+        var response = await client.DeleteAsync($"/api/admin/exercises/{Guid.NewGuid()}");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     private record ExerciseResponse(Guid Id, string Title, string? Description, string? CoverImageUrl, int Order, bool IsPublished);
+    private record UnitIdOnly(Guid Id);
+    private record TrackIdAndUrls(Guid Id, string AudioUrl, string SrtUrl);
 }

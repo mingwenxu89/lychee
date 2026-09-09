@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { Pager } from '@/components/Pager'
 
 type HistoryEntry = {
   trackId: string
@@ -15,6 +16,10 @@ type HistoryEntry = {
   timestamp: string
 }
 
+type PagedResponse<T> = { items: T[]; totalCount: number; page: number; pageSize: number }
+
+const PAGE_SIZE = 20
+
 function formatRelativeTime(iso: string): string {
   const diffMs = Date.now() - new Date(iso).getTime()
   const hours = Math.floor(diffMs / (1000 * 60 * 60))
@@ -26,30 +31,31 @@ function formatRelativeTime(iso: string): string {
 }
 
 export default function HistoryPage() {
-  const [entries, setEntries] = useState<HistoryEntry[] | null>(null)
+  const [page, setPage] = useState(1)
+  const [data, setData] = useState<PagedResponse<HistoryEntry> | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     async function load() {
-      const response = await fetch('/api/learner/history')
+      const response = await fetch(`/api/learner/history?page=${page}&pageSize=${PAGE_SIZE}`)
       if (!response.ok) {
         setError('Failed to load your history.')
         return
       }
-      setEntries(await response.json())
+      setData(await response.json())
     }
     load()
-  }, [])
+  }, [page])
 
   if (error) return <main style={{ padding: 40 }}>{error}</main>
-  if (!entries) return <main style={{ padding: 40, color: 'var(--ink-soft)', fontWeight: 700 }}>Loading...</main>
+  if (!data) return <main style={{ padding: 40, color: 'var(--ink-soft)', fontWeight: 700 }}>Loading...</main>
 
   return (
     <main style={{ padding: '20px 40px', display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 820, margin: '0 auto' }}>
       <h1 style={{ margin: 0, fontSize: 30, fontWeight: 700 }}>History</h1>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        {entries.map((entry) => {
+        {data.items.map((entry) => {
           const href = entry.practiceType === 'Recitation'
             ? `/tracks/${entry.trackId}?mode=full`
             : `/tracks/${entry.trackId}?mode=sentence`
@@ -106,6 +112,8 @@ export default function HistoryPage() {
           )
         })}
       </div>
+
+      <Pager page={data.page} pageSize={data.pageSize} totalCount={data.totalCount} onPageChange={setPage} />
     </main>
   )
 }

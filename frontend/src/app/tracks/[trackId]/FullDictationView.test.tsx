@@ -8,8 +8,8 @@ const track: LearnerTrack = {
   exerciseTitle: 'Test Exercise', level: 'A1', wordsPerMinute: 120, duration: '00:00:04',
   audioUrl: 'https://example.test/audio.mp3',
   sentences: [
-    { id: 's1', index: 0, text: 'Hello there.', startTime: '00:00:00', endTime: '00:00:02', isFavorited: false },
-    { id: 's2', index: 1, text: 'Good morning.', startTime: '00:00:02', endTime: '00:00:04', isFavorited: false }
+    { id: 's1', index: 0, text: 'Hello there.', startTime: '00:00:00', endTime: '00:00:02' },
+    { id: 's2', index: 1, text: 'Good morning.', startTime: '00:00:02', endTime: '00:00:04' }
   ],
   nextTrackId: null, isFavorited: false
 }
@@ -56,9 +56,6 @@ function mockFetch(options: {
       return completeStatus === 200
         ? new Response(JSON.stringify(complete), { status: 200 })
         : new Response(null, { status: completeStatus })
-    }
-    if (url.includes('/favorite')) {
-      return new Response(null, { status: 204 })
     }
     throw new Error(`Unhandled fetch in test: ${url}`)
   })
@@ -131,20 +128,6 @@ describe('FullDictationView — Blind round', () => {
     expect(playSpy).toHaveBeenCalled()
   })
 
-  it('shows a Favorite button that toggles the current sentence via the favorite endpoint, matching SentencePracticeView', async () => {
-    const fetchMock = mockFetch()
-
-    render(<FullDictationView track={track} onCompleted={vi.fn()} onBack={vi.fn()} audioObjectUrl="blob:fake" audioError={null} />)
-    await screen.findByPlaceholderText(/type what you hear/i)
-
-    fireEvent.click(screen.getByRole('button', { name: 'Add sentence to favorites' }))
-
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenLastCalledWith('/api/learner/sentences/s1/favorite', { method: 'PUT' })
-    })
-    expect(await screen.findByRole('button', { name: 'Remove sentence from favorites' })).toBeInTheDocument()
-  })
-
   it('supports keyboard shortcuts: Ctrl+/ resets, and a bare tap of Ctrl plays/pauses', async () => {
     mockFetch()
 
@@ -169,6 +152,62 @@ describe('FullDictationView — Blind round', () => {
     fireEvent.keyUp(window, { key: 'Control' })
 
     // A bare Ctrl tap (down, then up, with nothing else in between) plays/pauses.
+    expect(playSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows a Play/Pause shortcut hint on hover and a link to view the rest of the shortcuts', async () => {
+    mockFetch()
+
+    render(<FullDictationView track={track} onCompleted={vi.fn()} onBack={vi.fn()} audioObjectUrl="blob:fake" audioError={null} />)
+    await screen.findByPlaceholderText(/type what you hear/i)
+
+    expect(screen.getByRole('button', { name: /play/i })).toHaveAttribute('title', 'Play (Ctrl)')
+    expect(screen.getByText('Press "Ctrl" to play or pause.')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /view other shortcuts/i }))
+
+    expect(screen.getByText('Keyboard Shortcuts')).toBeInTheDocument()
+    expect(screen.getByText('Play / Pause')).toBeInTheDocument()
+    expect(screen.getByText('Reset')).toBeInTheDocument()
+    expect(screen.getByText('Toggle microphone')).toBeInTheDocument()
+    // Full Dictation has no sentence-navigation or Skip controls, unlike SentencePracticeView.
+    expect(screen.queryByText('Previous sentence')).not.toBeInTheDocument()
+    expect(screen.queryByText('Skip')).not.toBeInTheDocument()
+  })
+
+  it('the Play/Pause button label updates to Pause once playing, matching its shortcut hint', async () => {
+    mockFetch()
+
+    render(<FullDictationView track={track} onCompleted={vi.fn()} onBack={vi.fn()} audioObjectUrl="blob:fake" audioError={null} />)
+    await screen.findByPlaceholderText(/type what you hear/i)
+
+    const audio = document.querySelector('audio')!
+    Object.defineProperty(audio, 'paused', { value: false, writable: true, configurable: true })
+    fireEvent(audio, new Event('play'))
+
+    expect(screen.getByRole('button', { name: /pause/i })).toHaveAttribute('title', 'Pause (Ctrl)')
+  })
+
+  it('closing the shortcuts modal re-enables keyboard shortcuts, and they are suspended while it is open', async () => {
+    mockFetch()
+
+    render(<FullDictationView track={track} onCompleted={vi.fn()} onBack={vi.fn()} audioObjectUrl="blob:fake" audioError={null} />)
+    await screen.findByPlaceholderText(/type what you hear/i)
+
+    fireEvent.click(screen.getByRole('button', { name: /view other shortcuts/i }))
+    const playSpy = window.HTMLMediaElement.prototype.play as ReturnType<typeof vi.fn>
+    playSpy.mockClear()
+
+    // Ctrl tap must not play/pause while the modal has focus.
+    fireEvent.keyDown(window, { key: 'Control' })
+    fireEvent.keyUp(window, { key: 'Control' })
+    expect(playSpy).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    expect(screen.queryByText('Keyboard Shortcuts')).not.toBeInTheDocument()
+
+    fireEvent.keyDown(window, { key: 'Control' })
+    fireEvent.keyUp(window, { key: 'Control' })
     expect(playSpy).toHaveBeenCalledTimes(1)
   })
 
@@ -292,9 +331,9 @@ describe('FullDictationView — Blind round', () => {
     const threeSentenceTrack: LearnerTrack = {
       ...track,
       sentences: [
-        { id: 's1', index: 0, text: 'Hello there.', startTime: '00:00:00', endTime: '00:00:02', isFavorited: false },
-        { id: 's2', index: 1, text: 'Good morning.', startTime: '00:00:02', endTime: '00:00:04', isFavorited: false },
-        { id: 's3', index: 2, text: 'How are you?', startTime: '00:00:04', endTime: '00:00:06', isFavorited: false }
+        { id: 's1', index: 0, text: 'Hello there.', startTime: '00:00:00', endTime: '00:00:02' },
+        { id: 's2', index: 1, text: 'Good morning.', startTime: '00:00:02', endTime: '00:00:04' },
+        { id: 's3', index: 2, text: 'How are you?', startTime: '00:00:04', endTime: '00:00:06' }
       ]
     }
     const fetchMock = mockFetch()
@@ -604,6 +643,130 @@ describe('FullDictationView — Blind round', () => {
     // (the reference word, since dictation-variant DiffText shows reference text) is pink,
     // since the learner's actual word didn't match.
     expect(screen.getByText('morning.')).toHaveStyle({ color: 'var(--primary)' })
+  })
+
+  it('the summary screen lets the learner replay a single sentence, stopping at its own end without advancing to the next one', async () => {
+    mockFetch({ complete: { score: 1, finalCorrectSentenceIds: ['s1', 's2'] } })
+
+    render(<FullDictationView track={track} onCompleted={vi.fn()} onBack={vi.fn()} audioObjectUrl="blob:fake" audioError={null} />)
+    await screen.findByPlaceholderText(/type what you hear/i)
+    fireEvent.change(screen.getByPlaceholderText(/type what you hear/i), { target: { value: 'Hello there.' } })
+    fireEvent.click(screen.getByRole('button', { name: /next/i }))
+    await screen.findByPlaceholderText(/type what you hear/i)
+    fireEvent.change(screen.getByPlaceholderText(/type what you hear/i), { target: { value: 'Good morning.' } })
+    fireEvent.click(screen.getByRole('button', { name: /next/i }))
+    await screen.findByText(/100%/)
+
+    const playSpy = window.HTMLMediaElement.prototype.play as ReturnType<typeof vi.fn>
+    const pauseSpy = window.HTMLMediaElement.prototype.pause as ReturnType<typeof vi.fn>
+    playSpy.mockClear()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Play sentence 2' }))
+
+    const audio = document.querySelector('audio')!
+    expect(audio.currentTime).toBe(2)
+    expect(playSpy).toHaveBeenCalledTimes(1)
+
+    // Reaching s2's own end (00:00:04) pauses — it must not keep playing into whatever (there is
+    // no sentence 3) would come after it.
+    Object.defineProperty(audio, 'currentTime', { value: 4, writable: true })
+    fireEvent(audio, new Event('timeupdate'))
+    expect(pauseSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('the round-choice screen also lets the learner replay a single sentence', async () => {
+    mockFetch()
+
+    render(<FullDictationView track={track} onCompleted={vi.fn()} onBack={vi.fn()} audioObjectUrl="blob:fake" audioError={null} />)
+    await screen.findByPlaceholderText(/type what you hear/i)
+    fireEvent.change(screen.getByPlaceholderText(/type what you hear/i), { target: { value: 'wrong' } })
+    fireEvent.click(screen.getByRole('button', { name: /next/i }))
+    await screen.findByPlaceholderText(/type what you hear/i)
+    fireEvent.change(screen.getByPlaceholderText(/type what you hear/i), { target: { value: 'wrong' } })
+    fireEvent.click(screen.getByRole('button', { name: /next/i }))
+    await screen.findByRole('button', { name: /^next round$/i })
+
+    const playSpy = window.HTMLMediaElement.prototype.play as ReturnType<typeof vi.fn>
+    playSpy.mockClear()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Play sentence 1' }))
+
+    const audio = document.querySelector('audio')!
+    expect(audio.currentTime).toBe(0)
+    expect(playSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('clicking anywhere on a result row plays that sentence, not just its trailing play button', async () => {
+    mockFetch({ complete: { score: 1, finalCorrectSentenceIds: ['s1', 's2'] } })
+
+    render(<FullDictationView track={track} onCompleted={vi.fn()} onBack={vi.fn()} audioObjectUrl="blob:fake" audioError={null} />)
+    await screen.findByPlaceholderText(/type what you hear/i)
+    fireEvent.change(screen.getByPlaceholderText(/type what you hear/i), { target: { value: 'Hello there.' } })
+    fireEvent.click(screen.getByRole('button', { name: /next/i }))
+    await screen.findByPlaceholderText(/type what you hear/i)
+    fireEvent.change(screen.getByPlaceholderText(/type what you hear/i), { target: { value: 'Good morning.' } })
+    fireEvent.click(screen.getByRole('button', { name: /next/i }))
+    await screen.findByText(/100%/)
+
+    const playSpy = window.HTMLMediaElement.prototype.play as ReturnType<typeof vi.fn>
+    playSpy.mockClear()
+
+    // "Good morning." is s2's reference text — click the word itself, not the play button.
+    fireEvent.click(screen.getByText('morning.'))
+
+    const audio = document.querySelector('audio')!
+    expect(audio.currentTime).toBe(2)
+    expect(playSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('highlights the currently-playing result row, and clicking it again pauses and clears the highlight', async () => {
+    mockFetch({ complete: { score: 1, finalCorrectSentenceIds: ['s1', 's2'] } })
+
+    render(<FullDictationView track={track} onCompleted={vi.fn()} onBack={vi.fn()} audioObjectUrl="blob:fake" audioError={null} />)
+    await screen.findByPlaceholderText(/type what you hear/i)
+    fireEvent.change(screen.getByPlaceholderText(/type what you hear/i), { target: { value: 'Hello there.' } })
+    fireEvent.click(screen.getByRole('button', { name: /next/i }))
+    await screen.findByPlaceholderText(/type what you hear/i)
+    fireEvent.change(screen.getByPlaceholderText(/type what you hear/i), { target: { value: 'Good morning.' } })
+    fireEvent.click(screen.getByRole('button', { name: /next/i }))
+    await screen.findByText(/100%/)
+
+    const pauseSpy = window.HTMLMediaElement.prototype.pause as ReturnType<typeof vi.fn>
+    const row2 = screen.getByRole('button', { name: 'Play sentence 2' }).closest('div')!
+
+    fireEvent.click(screen.getByRole('button', { name: 'Play sentence 2' }))
+    expect(row2).toHaveStyle({ background: 'var(--primary-soft)' })
+
+    pauseSpy.mockClear()
+    fireEvent.click(screen.getByRole('button', { name: 'Play sentence 2' }))
+    expect(pauseSpy).toHaveBeenCalledTimes(1)
+    expect(row2).toHaveStyle({ background: 'transparent' })
+  })
+
+  it('switching to a different result row while one is playing clears the old highlight and sets the new one', async () => {
+    mockFetch({ complete: { score: 1, finalCorrectSentenceIds: ['s1', 's2'] } })
+
+    render(<FullDictationView track={track} onCompleted={vi.fn()} onBack={vi.fn()} audioObjectUrl="blob:fake" audioError={null} />)
+    await screen.findByPlaceholderText(/type what you hear/i)
+    fireEvent.change(screen.getByPlaceholderText(/type what you hear/i), { target: { value: 'Hello there.' } })
+    fireEvent.click(screen.getByRole('button', { name: /next/i }))
+    await screen.findByPlaceholderText(/type what you hear/i)
+    fireEvent.change(screen.getByPlaceholderText(/type what you hear/i), { target: { value: 'Good morning.' } })
+    fireEvent.click(screen.getByRole('button', { name: /next/i }))
+    await screen.findByText(/100%/)
+
+    const row1 = screen.getByRole('button', { name: 'Play sentence 1' }).closest('div')!
+    const row2 = screen.getByRole('button', { name: 'Play sentence 2' }).closest('div')!
+
+    fireEvent.click(screen.getByRole('button', { name: 'Play sentence 1' }))
+    expect(row1).toHaveStyle({ background: 'var(--primary-soft)' })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Play sentence 2' }))
+    expect(row1).toHaveStyle({ background: 'transparent' })
+    expect(row2).toHaveStyle({ background: 'var(--primary-soft)' })
+
+    const audio = document.querySelector('audio')!
+    expect(audio.currentTime).toBe(2)
   })
 
   it('re-grades a previously-correct sentence fresh each round: editing it wrong sends it back as incorrect, not permanently correct', async () => {

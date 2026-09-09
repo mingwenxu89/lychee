@@ -1,5 +1,5 @@
 // frontend/src/app/history/page.test.tsx
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import HistoryPage from './page'
 
@@ -10,7 +10,10 @@ const entries = [
 ]
 
 beforeEach(() => {
-  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify(entries), { status: 200 })))
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(
+    JSON.stringify({ items: entries, totalCount: entries.length, page: 1, pageSize: 20 }),
+    { status: 200 }
+  )))
 })
 
 describe('HistoryPage', () => {
@@ -37,5 +40,36 @@ describe('HistoryPage', () => {
 
     const links = screen.getAllByRole('link', { name: /practice again/i })
     expect(links.some((l) => l.getAttribute('href') === '/tracks/track-3?mode=full')).toBe(true)
+  })
+
+  it('hides the pager when everything fits on one page', async () => {
+    render(<HistoryPage />)
+    await screen.findByText('The First Snowfall')
+
+    expect(screen.queryByRole('button', { name: /next/i })).not.toBeInTheDocument()
+  })
+
+  it('fetches the next page and shows its results when Next is clicked', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(
+        JSON.stringify({ items: entries, totalCount: 25, page: 1, pageSize: 20 }), { status: 200 }
+      ))
+      .mockResolvedValueOnce(new Response(
+        JSON.stringify({
+          items: [{ trackId: 'track-4', trackTitle: 'Page Two Track', exerciseTitle: 'Short Stories', practiceType: 'Practice', status: 'InProgress', accuracy: null, currentSentenceIndex: 0, totalSentences: 5, timestamp: new Date().toISOString() }],
+          totalCount: 25, page: 2, pageSize: 20
+        }), { status: 200 }
+      ))
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<HistoryPage />)
+    await screen.findByText('The First Snowfall')
+    expect(screen.getByText('Page 1 of 2')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /next/i }))
+
+    expect(await screen.findByText('Page Two Track')).toBeInTheDocument()
+    expect(screen.getByText('Page 2 of 2')).toBeInTheDocument()
+    expect(fetchMock).toHaveBeenLastCalledWith('/api/learner/history?page=2&pageSize=20')
   })
 })

@@ -59,7 +59,74 @@ function expandContractions(text: string): string {
   })
 }
 
+// Number words are folded to their digit value before comparison (see mergeNumberWordRuns),
+// so "10" and "ten" — or "twenty-one" and "21" — compare as the same word. Only cardinals; ordinals
+// ("first", "1st") aren't handled since they weren't asked for. "and" is a scale-only connector
+// ("two hundred and five") and never a run on its own.
+type NumberWordKind = 'ones' | 'teens' | 'tens' | 'scale'
+const NUMBER_WORDS: Record<string, { value: number; kind: NumberWordKind }> = {
+  zero: { value: 0, kind: 'ones' }, one: { value: 1, kind: 'ones' }, two: { value: 2, kind: 'ones' },
+  three: { value: 3, kind: 'ones' }, four: { value: 4, kind: 'ones' }, five: { value: 5, kind: 'ones' },
+  six: { value: 6, kind: 'ones' }, seven: { value: 7, kind: 'ones' }, eight: { value: 8, kind: 'ones' },
+  nine: { value: 9, kind: 'ones' },
+  ten: { value: 10, kind: 'teens' }, eleven: { value: 11, kind: 'teens' }, twelve: { value: 12, kind: 'teens' },
+  thirteen: { value: 13, kind: 'teens' }, fourteen: { value: 14, kind: 'teens' }, fifteen: { value: 15, kind: 'teens' },
+  sixteen: { value: 16, kind: 'teens' }, seventeen: { value: 17, kind: 'teens' }, eighteen: { value: 18, kind: 'teens' },
+  nineteen: { value: 19, kind: 'teens' },
+  twenty: { value: 20, kind: 'tens' }, thirty: { value: 30, kind: 'tens' }, forty: { value: 40, kind: 'tens' },
+  fifty: { value: 50, kind: 'tens' }, sixty: { value: 60, kind: 'tens' }, seventy: { value: 70, kind: 'tens' },
+  eighty: { value: 80, kind: 'tens' }, ninety: { value: 90, kind: 'tens' },
+  hundred: { value: 100, kind: 'scale' }, thousand: { value: 1000, kind: 'scale' }, million: { value: 1_000_000, kind: 'scale' }
+}
+
 type Token = { core: string; display: string }
+
+// Scans a token stream for maximal runs of number words (e.g. "twenty", "one" or "twenty-one",
+// tokenized identically since tokenize() already drops the hyphen as a separator) and merges each
+// run into a single token whose core is the resulting digit string — so it lines up with a plain
+// numeral written on the other side. Non-number tokens, and the display text, pass through
+// unchanged; only the comparison-only `core` field is affected.
+function mergeNumberWordRuns(tokens: Token[]): Token[] {
+  const result: Token[] = []
+  let i = 0
+  while (i < tokens.length) {
+    const start = i
+    let total = 0
+    let current = 0
+    let matchedAny = false
+    while (i < tokens.length) {
+      const word = tokens[i].core.toLowerCase()
+      const entry = NUMBER_WORDS[word]
+      if (entry) {
+        matchedAny = true
+        if (entry.kind === 'scale') {
+          current = (current === 0 ? 1 : current) * entry.value
+          if (entry.value >= 1000) {
+            total += current
+            current = 0
+          }
+        } else {
+          current += entry.value
+        }
+        i++
+        continue
+      }
+      if (word === 'and' && matchedAny && i + 1 < tokens.length && NUMBER_WORDS[tokens[i + 1].core.toLowerCase()]) {
+        i++
+        continue
+      }
+      break
+    }
+    if (matchedAny) {
+      const display = tokens.slice(start, i).map((t) => t.display).join(' ')
+      result.push({ core: String(total + current), display })
+    } else {
+      result.push(tokens[start])
+      i = start + 1
+    }
+  }
+  return result
+}
 
 // Captures a word together with any punctuation directly attached to it (e.g. "there.",
 // "snowfall,") so the diff can be compared on the punctuation-free core while still
@@ -81,8 +148,8 @@ export function compare(referenceText: string, submittedText: string): Compariso
   const expandedReference = expandContractions(referenceText)
   const expandedSubmitted = expandContractions(submittedText)
 
-  const refWords = tokenize(expandedReference)
-  const subWords = tokenize(expandedSubmitted)
+  const refWords = mergeNumberWordRuns(tokenize(expandedReference))
+  const subWords = mergeNumberWordRuns(tokenize(expandedSubmitted))
   const refNorm = refWords.map((t) => normalize(t.core))
   const subNorm = subWords.map((t) => normalize(t.core))
 

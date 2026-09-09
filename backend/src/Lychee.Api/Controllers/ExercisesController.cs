@@ -1,5 +1,6 @@
 using Lychee.Data;
 using Lychee.Data.Entities;
+using Lychee.Storage;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -17,8 +18,13 @@ public record UpdatePublishStatusRequest(bool IsPublished);
 public class ExercisesController : ControllerBase
 {
     private readonly LycheeDbContext _db;
+    private readonly IBlobStorageService _blobStorageService;
 
-    public ExercisesController(LycheeDbContext db) => _db = db;
+    public ExercisesController(LycheeDbContext db, IBlobStorageService blobStorageService)
+    {
+        _db = db;
+        _blobStorageService = blobStorageService;
+    }
 
     private static ExerciseResponse ToResponse(Exercise e) =>
         new(e.Id, e.Title, e.Description, e.CoverImageUrl, e.Order, e.IsPublished);
@@ -76,5 +82,26 @@ public class ExercisesController : ControllerBase
         exercise.IsPublished = request.IsPublished;
         await _db.SaveChangesAsync();
         return Ok(ToResponse(exercise));
+    }
+
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> Delete(Guid id)
+    {
+        var exercise = await _db.Exercises.FindAsync(id);
+        if (exercise is null) return NotFound();
+
+        var trackBlobs = await _db.Tracks
+            .Where(t => t.Unit.ExerciseId == id)
+            .Select(t => new { t.AudioFileUrl, t.SrtFileUrl })
+            .ToListAsync();
+        foreach (var blob in trackBlobs)
+        {
+            await _blobStorageService.DeleteStoredAsync(blob.AudioFileUrl);
+            await _blobStorageService.DeleteStoredAsync(blob.SrtFileUrl);
+        }
+
+        _db.Exercises.Remove(exercise);
+        await _db.SaveChangesAsync();
+        return NoContent();
     }
 }

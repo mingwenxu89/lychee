@@ -13,7 +13,6 @@ public class LycheeDbContext : IdentityDbContext<ApplicationUser, IdentityRole<G
     public DbSet<Unit> Units => Set<Unit>();
     public DbSet<Track> Tracks => Set<Track>();
     public DbSet<Sentence> Sentences => Set<Sentence>();
-    public DbSet<SentenceFavorite> SentenceFavorites => Set<SentenceFavorite>();
     public DbSet<TrackFavorite> TrackFavorites => Set<TrackFavorite>();
     public DbSet<PracticeSession> PracticeSessions => Set<PracticeSession>();
     public DbSet<RecitationAttempt> RecitationAttempts => Set<RecitationAttempt>();
@@ -48,7 +47,6 @@ public class LycheeDbContext : IdentityDbContext<ApplicationUser, IdentityRole<G
             .HasDefaultValueSql("now()")
             .ValueGeneratedOnAdd();
 
-        modelBuilder.Entity<SentenceFavorite>().HasKey(f => new { f.UserId, f.SentenceId });
         modelBuilder.Entity<TrackFavorite>().HasKey(f => new { f.UserId, f.TrackId });
 
         // A learner can have one InProgress-or-Completed row per (UserId, TrackId, Mode) — a

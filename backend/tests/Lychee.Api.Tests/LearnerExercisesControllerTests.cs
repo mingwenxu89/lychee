@@ -79,7 +79,7 @@ public class LearnerExercisesControllerTests : IClassFixture<LycheeWebApplicatio
         return (exercise.Id, unit!.Id);
     }
 
-    private async Task<Guid> AddTrackAsync(HttpClient admin, Guid unitId, string title, string level = "A1")
+    private async Task<Guid> AddTrackAsync(HttpClient admin, Guid unitId, string title, string level = "A1", int order = 0)
     {
         using var form = new MultipartFormDataContent();
         var audioContent = new ByteArrayContent(Encoding.UTF8.GetBytes("fake-audio"));
@@ -88,6 +88,7 @@ public class LearnerExercisesControllerTests : IClassFixture<LycheeWebApplicatio
         form.Add(new StringContent("1\n00:00:00,000 --> 00:00:01,000\nHi.\n"), "SrtFile", "track.srt");
         form.Add(new StringContent(level), "Level");
         form.Add(new StringContent(title), "Title");
+        form.Add(new StringContent(order.ToString()), "Order");
         var trackResponse = await admin.PostAsync($"/api/admin/units/{unitId}/tracks", form);
         var track = await trackResponse.Content.ReadFromJsonAsync<IdOnly>();
         return track!.Id;
@@ -189,13 +190,13 @@ public class LearnerExercisesControllerTests : IClassFixture<LycheeWebApplicatio
     }
 
     [Fact]
-    public async Task Get_ReturnsTracksWithinUnitInCreationOrder()
+    public async Task Get_ReturnsTracksWithinUnitOrderedByTrackOrder()
     {
         var admin = AdminClient();
         var (exerciseId, unitId) = await CreatePublishedExerciseWithUnitAsync(admin);
-        var firstTrackId = await AddTrackAsync(admin, unitId, "First Track");
-        var secondTrackId = await AddTrackAsync(admin, unitId, "Second Track");
-        var thirdTrackId = await AddTrackAsync(admin, unitId, "Third Track");
+        var thirdTrackId = await AddTrackAsync(admin, unitId, "Third Track", order: 3);
+        var firstTrackId = await AddTrackAsync(admin, unitId, "First Track", order: 1);
+        var secondTrackId = await AddTrackAsync(admin, unitId, "Second Track", order: 2);
 
         var response = await (await LearnerClientAsync()).GetAsync($"/api/learner/exercises/{exerciseId}");
 

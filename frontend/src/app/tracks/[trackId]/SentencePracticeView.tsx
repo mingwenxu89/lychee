@@ -137,12 +137,9 @@ export function SentencePracticeView({
   const [isRecording, setIsRecording] = useState(false)
   const [completedIndices, setCompletedIndices] = useState<Set<number>>(new Set())
   const [showShortcuts, setShowShortcuts] = useState(false)
-  const [favoritedSentenceIds, setFavoritedSentenceIds] = useState(
-    () => new Set(track.sentences.filter((s) => s.isFavorited).map((s) => s.id))
-  )
   const audioRef = useRef<HTMLAudioElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const recognizerRef = useRef<{ start: () => void; stop: () => void } | null>(null)
+  const recognizerRef = useRef<{ start: () => void; stop: () => void; resetSegment: () => void } | null>(null)
   const baseAnswerRef = useRef('')
   const ctrlComboFiredRef = useRef(false)
   const autoplayOnChangeRef = useRef(false)
@@ -181,11 +178,6 @@ export function SentencePracticeView({
     audio.currentTime = sentenceStart
     setElapsedInSentence(0)
 
-    if (autoplayOnChangeRef.current) {
-      autoplayOnChangeRef.current = false
-      audio.play()
-    }
-
     function onTimeUpdate() {
       if (audio.currentTime >= sentenceEnd) {
         audio.pause()
@@ -196,6 +188,12 @@ export function SentencePracticeView({
       setElapsedInSentence(audio.currentTime - sentenceStart)
     }
     audio.addEventListener('timeupdate', onTimeUpdate)
+
+    if (autoplayOnChangeRef.current) {
+      autoplayOnChangeRef.current = false
+      audio.play()
+    }
+
     return () => audio.removeEventListener('timeupdate', onTimeUpdate)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentSentence])
@@ -223,6 +221,19 @@ export function SentencePracticeView({
     textarea.style.height = 'auto'
     textarea.style.height = `${textarea.scrollHeight}px`
   }, [answer])
+
+  // The mic must only ever stop via an explicit user action (click or Ctrl+M — see
+  // handleMicClick), never just because the sentence changed. But the underlying recognizer's
+  // event.results never shrinks or resets on its own, so if left alone across a sentence
+  // boundary it would keep prepending the PREVIOUS sentence's words onto every new transcript —
+  // this marks a fresh transcript "segment" boundary right as the new sentence loads, without
+  // touching isRecording or calling stop(), matching FullDictationView's same fix.
+  useEffect(() => {
+    if (!isRecording) return
+    recognizerRef.current?.resetSegment()
+    baseAnswerRef.current = ''
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.currentSentenceIndex])
 
   function handlePlayPauseClick() {
     const audio = audioRef.current
@@ -303,28 +314,7 @@ export function SentencePracticeView({
     // Skip means the learner is confident they know this sentence, so it counts toward
     // Progress — unlike Previous/Next (pure navigation) or jumping via the Progress list.
     setCompletedIndices((prev) => new Set(prev).add(session.currentSentenceIndex))
-    handleAdvance(session.currentSentenceIndex + 1)
-  }
-
-  async function handleToggleSentenceFavorite() {
-    if (!currentSentence) return
-    const sentenceId = currentSentence.id
-    const isFavorited = favoritedSentenceIds.has(sentenceId)
-    setFavoritedSentenceIds((prev) => {
-      const next = new Set(prev)
-      if (isFavorited) next.delete(sentenceId)
-      else next.add(sentenceId)
-      return next
-    })
-    const response = await fetch(`/api/learner/sentences/${sentenceId}/favorite`, { method: isFavorited ? 'DELETE' : 'PUT' })
-    if (!response.ok) {
-      setFavoritedSentenceIds((prev) => {
-        const next = new Set(prev)
-        if (isFavorited) next.add(sentenceId)
-        else next.delete(sentenceId)
-        return next
-      })
-    }
+    handleAdvanceAndPlay(session.currentSentenceIndex + 1)
   }
 
   function handleMicClick() {
@@ -332,6 +322,9 @@ export function SentencePracticeView({
       recognizerRef.current?.stop()
       return
     }
+    // Same staleness fix as the textarea's onChange: starting a fresh voice answer invalidates
+    // whatever Check result (correct or not) is currently showing.
+    if (result) setResult(null)
     baseAnswerRef.current = answer
     const recognizer = createContinuousRecognizer(
       (text) => setAnswer(baseAnswerRef.current ? `${baseAnswerRef.current} ${text}` : text),
@@ -397,7 +390,7 @@ export function SentencePracticeView({
       if (e.key === 'Enter') {
         e.preventDefault()
         if (result?.isCorrect && session) {
-          handleAdvance(session.currentSentenceIndex + 1)
+          handleAdvanceAndPlay(session.currentSentenceIndex + 1)
         } else {
           handleSubmit()
         }
@@ -575,7 +568,13 @@ export function SentencePracticeView({
               ref={textareaRef}
               rows={3}
               value={answer}
-              onChange={(e) => setAnswer(e.target.value)}
+              onChange={(e) => {
+                setAnswer(e.target.value)
+                // Editing after a Check result (correct or not) invalidates it — the checkmark/
+                // diff box (and, for a correct result, the Next button in its place) must not
+                // keep showing stale feedback for text the learner has since changed.
+                if (result) setResult(null)
+              }}
               placeholder="Type what you hear, or tap the mic to speak it instead"
               disabled={!isReady}
               style={{
@@ -597,7 +596,7 @@ export function SentencePracticeView({
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 {result && result.isCorrect ? (
                   <button
-                    onClick={() => session && handleAdvance(session.currentSentenceIndex + 1)}
+                    onClick={() => session && handleAdvanceAndPlay(session.currentSentenceIndex + 1)}
                     disabled={!isReady}
                     title="Next (Enter)"
                     style={btnPrimarySmall}
@@ -619,24 +618,6 @@ export function SentencePracticeView({
                 )}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <button
-                  onClick={handleToggleSentenceFavorite}
-                  disabled={!currentSentence}
-                  aria-label={currentSentence && favoritedSentenceIds.has(currentSentence.id) ? 'Remove sentence from favorites' : 'Add sentence to favorites'}
-                  aria-pressed={currentSentence ? favoritedSentenceIds.has(currentSentence.id) : false}
-                  style={{ background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', flexShrink: 0 }}
-                >
-                  <svg
-                    width="18"
-                    height="18"
-                    viewBox="0 0 24 24"
-                    fill={currentSentence && favoritedSentenceIds.has(currentSentence.id) ? 'var(--primary)' : 'none'}
-                    stroke={currentSentence && favoritedSentenceIds.has(currentSentence.id) ? 'var(--primary)' : 'var(--ink-faint)'}
-                    strokeWidth="2"
-                  >
-                    <path d="M12 21s-6.7-4.35-9.3-8.28C1.02 10.4 1.5 6.9 4.3 5.3a5 5 0 0 1 7 1.2 5 5 0 0 1 7-1.2c2.8 1.6 3.28 5.1 1.6 7.42C18.7 16.65 12 21 12 21z" strokeLinejoin="round" />
-                  </svg>
-                </button>
                 <button
                   onClick={handleTryAgain}
                   aria-label="Reset"
@@ -710,7 +691,10 @@ export function SentencePracticeView({
               style={{
                 width: '100%',
                 boxSizing: 'border-box',
-                background: result.isCorrect ? 'var(--leaf-soft)' : 'var(--primary-soft)',
+                // Neutral gray, deliberately matching Full Dictation's result-panel
+                // background (see resultPanelBg in FullDictationView.tsx) so both
+                // dictation modes' result screens look the same.
+                background: 'oklch(96% 0 0)',
                 borderRadius: 16,
                 padding: '16px 20px',
                 display: 'flex',
@@ -718,7 +702,7 @@ export function SentencePracticeView({
                 gap: 10
               }}
             >
-              {result.isCorrect ? (
+              {result.isCorrect && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <div
                     style={{
@@ -736,11 +720,10 @@ export function SentencePracticeView({
                   </div>
                   <span style={{ fontWeight: 800, color: 'var(--leaf-dark)' }}>Nice — that&apos;s right!</span>
                 </div>
-              ) : (
-                <div style={{ fontSize: 17, lineHeight: 1.8, fontWeight: 400 }}>
-                  <DiffText words={result.words} variant="dictation" />
-                </div>
               )}
+              <div style={{ fontSize: 17, lineHeight: 1.8, fontWeight: 400 }}>
+                <DiffText words={result.words} variant="dictation" firstMismatchOnly />
+              </div>
             </div>
           )}
 
@@ -750,7 +733,7 @@ export function SentencePracticeView({
       <SentenceProgressGrid
         count={track.sentences.length}
         disabled={!isReady}
-        onJump={handleAdvance}
+        onJump={handleAdvanceAndPlay}
         getStatus={(i) => {
           if (session !== null && i === session.currentSentenceIndex) return 'current'
           if (completedIndices.has(i)) return 'correct'

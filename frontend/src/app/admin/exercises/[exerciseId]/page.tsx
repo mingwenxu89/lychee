@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { AdminBreadcrumb } from '../../AdminBreadcrumb'
+import { ConfirmDeleteByNameModal } from '../../ConfirmDeleteByNameModal'
 
 type Exercise = { id: string; title: string }
 type Unit = { id: string; exerciseId: string; title: string; order: number; isPublished: boolean }
@@ -163,6 +164,18 @@ function PencilIcon() {
   )
 }
 
+function TrashIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--error)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 6h18" />
+      <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+      <path d="M10 11v6" />
+      <path d="M14 11v6" />
+    </svg>
+  )
+}
+
 function UnitFormModal({
   mode,
   form,
@@ -250,6 +263,9 @@ export default function ExerciseDetailPage() {
   const [form, setForm] = useState<UnitFormValues>({ title: '', order: '1' })
   const [formError, setFormError] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
+  const [deletingUnit, setDeletingUnit] = useState<Unit | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   async function loadExercise() {
     const response = await fetch(`/api/admin/exercises/${exerciseId}`)
@@ -314,6 +330,20 @@ export default function ExerciseDetailPage() {
     await loadUnits()
   }
 
+  async function handleDelete() {
+    if (!deletingUnit) return
+    setIsDeleting(true)
+    setDeleteError(null)
+    const response = await fetch(`/api/admin/units/${deletingUnit.id}`, { method: 'DELETE' })
+    setIsDeleting(false)
+    if (!response.ok) {
+      setDeleteError('Failed to delete unit')
+      return
+    }
+    setDeletingUnit(null)
+    await loadUnits()
+  }
+
   return (
     <>
       <AdminBreadcrumb
@@ -362,6 +392,16 @@ export default function ExerciseDetailPage() {
                   <button aria-label={`Edit ${unit.title}`} onClick={() => openEditModal(unit)} style={iconButtonStyle}>
                     <PencilIcon />
                   </button>
+                  <button
+                    aria-label={`Delete ${unit.title}`}
+                    onClick={() => {
+                      setDeleteError(null)
+                      setDeletingUnit(unit)
+                    }}
+                    style={iconButtonStyle}
+                  >
+                    <TrashIcon />
+                  </button>
                 </div>
               </div>
             ))}
@@ -377,6 +417,20 @@ export default function ExerciseDetailPage() {
             onClose={() => setModal(null)}
             error={formError}
             isSaving={isSaving}
+          />
+        )}
+
+        {deletingUnit && (
+          <ConfirmDeleteByNameModal
+            kind="unit"
+            name={deletingUnit.title}
+            onCancel={() => {
+              setDeletingUnit(null)
+              setDeleteError(null)
+            }}
+            onConfirm={handleDelete}
+            error={deleteError}
+            isDeleting={isDeleting}
           />
         )}
       </main>

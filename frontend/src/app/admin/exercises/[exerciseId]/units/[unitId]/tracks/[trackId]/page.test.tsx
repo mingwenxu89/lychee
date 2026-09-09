@@ -79,6 +79,34 @@ describe('TrackProofreadingPage', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
+  it('shows start/end times without the always-zero hour segment, since no track ever runs an hour', async () => {
+    render(<TrackProofreadingPage />)
+    await screen.findByDisplayValue('Original text')
+
+    expect(screen.getByLabelText('Sentence 1 start time')).toHaveValue('00:01')
+    expect(screen.getByLabelText('Sentence 1 end time')).toHaveValue('00:02')
+  })
+
+  it('saving an edited start time re-adds the hour segment the backend expects', async () => {
+    render(<TrackProofreadingPage />)
+    await screen.findByDisplayValue('Original text')
+
+    const startInput = screen.getByLabelText('Sentence 1 start time')
+    fireEvent.change(startInput, { target: { value: '01:30' } })
+
+    mockFetchOnce({ ...sentence, startTime: '00:01:30' })
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith('/api/admin/sentences/sentence-1', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: 'Original text', startTime: '00:01:30', endTime: '00:00:02' })
+      })
+    })
+    expect(startInput).toHaveValue('01:30')
+  })
+
   it('highlights a row as unsaved once its text is edited, and clears after saving', async () => {
     render(<TrackProofreadingPage />)
 

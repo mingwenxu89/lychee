@@ -11,7 +11,7 @@ import { RecitationPanel } from './RecitationPanel'
 import { CompletionPage } from './CompletionPage'
 import { preloadAudio } from '@/lib/audioPreload'
 
-export type LearnerSentence = { id: string; index: number; text: string; startTime: string; endTime: string; isFavorited: boolean }
+export type LearnerSentence = { id: string; index: number; text: string; startTime: string; endTime: string }
 export type LearnerTrack = {
   id: string
   unitId: string
@@ -46,9 +46,6 @@ function TrackPageContent() {
     : modeParam === 'dictation' ? 'dictation'
     : modeParam === 'recite' ? 'recite'
     : 'full'
-  const initialSentenceParam = searchParams.get('sentence')
-  const initialSentenceIndex = initialSentenceParam !== null ? Number(initialSentenceParam) : null
-
   const [track, setTrack] = useState<LearnerTrack | null>(null)
   const [mode, setMode] = useState<'sentence' | 'full' | 'dictation' | 'recite'>(initialMode)
   const [error, setError] = useState<string | null>(null)
@@ -187,7 +184,6 @@ function TrackPageContent() {
         <FullTextView
           key={practiceKey}
           track={track}
-          initialSentenceIndex={initialSentenceIndex}
           onStartFullDictation={() => setMode('dictation')}
           onStartBySentence={() => setMode('sentence')}
           onStartRecite={() => setMode('recite')}

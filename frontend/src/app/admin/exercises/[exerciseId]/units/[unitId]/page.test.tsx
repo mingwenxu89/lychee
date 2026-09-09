@@ -20,6 +20,7 @@ const track = {
   duration: '00:03:24',
   level: 'A2',
   isPublished: false,
+  order: 1,
   sentenceCount: 18
 }
 
@@ -85,6 +86,16 @@ describe('UnitDetailPage (Tracks)', () => {
     expect(sentencesLink).toHaveAttribute('href', '/admin/exercises/exercise-1/units/unit-1/tracks/track-1')
   })
 
+  it('shows the order number for each track', async () => {
+    vi.mocked(fetch).mockReset()
+    mockInitialLoad([track, { ...secondTrack, order: 2 }])
+    render(<UnitDetailPage />)
+
+    await screen.findByText('Chapter 1: Arrival')
+    const orderCells = screen.getAllByText(/^[12]$/)
+    expect(orderCells.map((el) => el.textContent)).toEqual(['1', '2'])
+  })
+
   it('requires both files before uploading a new track', async () => {
     render(<UnitDetailPage />)
     await screen.findByText('Chapter 1: Arrival')
@@ -105,14 +116,15 @@ describe('UnitDetailPage (Tracks)', () => {
     fireEvent.click(screen.getByRole('button', { name: /new track/i }))
     fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Chapter 2: The Storm' } })
     fireEvent.change(screen.getByLabelText('Level (CEFR)'), { target: { value: 'A2' } })
+    expect(screen.getByLabelText('Order')).toHaveValue(2)
 
     const audioFile = new File(['audio'], 'chapter2.mp3', { type: 'audio/mpeg' })
     const srtFile = new File(['srt'], 'chapter2.srt', { type: 'text/plain' })
     fireEvent.change(screen.getByLabelText('Audio File'), { target: { files: [audioFile] } })
     fireEvent.change(screen.getByLabelText('SRT File'), { target: { files: [srtFile] } })
 
-    mockFetchOnce({ ...track, id: 'track-2', title: 'Chapter 2: The Storm' }, 201)
-    mockFetchOnce([track, { ...track, id: 'track-2', title: 'Chapter 2: The Storm' }])
+    mockFetchOnce({ ...track, id: 'track-2', title: 'Chapter 2: The Storm', order: 2 }, 201)
+    mockFetchOnce([track, { ...track, id: 'track-2', title: 'Chapter 2: The Storm', order: 2 }])
 
     fireEvent.click(screen.getByRole('button', { name: /upload track/i }))
 
@@ -125,6 +137,7 @@ describe('UnitDetailPage (Tracks)', () => {
     const body = call?.[1]?.body as FormData
     expect(body.get('Title')).toBe('Chapter 2: The Storm')
     expect(body.get('Level')).toBe('A2')
+    expect(body.get('Order')).toBe('2')
     expect(body.get('AudioFile')).toBe(audioFile)
     expect(body.get('SrtFile')).toBe(srtFile)
 
@@ -139,12 +152,14 @@ describe('UnitDetailPage (Tracks)', () => {
 
     expect(screen.getByLabelText('Title')).toHaveValue('Chapter 1: Arrival')
     expect(screen.getByLabelText('Level (CEFR)')).toHaveValue('A2')
+    expect(screen.getByLabelText('Order')).toHaveValue(1)
     expect(screen.queryByLabelText('Audio File')).not.toBeInTheDocument()
 
     fireEvent.change(screen.getByLabelText('Level (CEFR)'), { target: { value: 'B1' } })
+    fireEvent.change(screen.getByLabelText('Order'), { target: { value: '3' } })
 
-    mockFetchOnce({ ...track, level: 'B1' })
-    mockFetchOnce([{ ...track, level: 'B1' }])
+    mockFetchOnce({ ...track, level: 'B1', order: 3 })
+    mockFetchOnce([{ ...track, level: 'B1', order: 3 }])
 
     fireEvent.click(screen.getByRole('button', { name: /save changes/i }))
 
@@ -152,7 +167,7 @@ describe('UnitDetailPage (Tracks)', () => {
       expect(fetch).toHaveBeenCalledWith('/api/admin/tracks/track-1', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: 'Chapter 1: Arrival', level: 'B1', description: 'Opening scene at the lighthouse.' })
+        body: JSON.stringify({ title: 'Chapter 1: Arrival', level: 'B1', description: 'Opening scene at the lighthouse.', order: 3 })
       })
     })
   })

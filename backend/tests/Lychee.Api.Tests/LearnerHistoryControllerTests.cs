@@ -81,8 +81,8 @@ public class LearnerHistoryControllerTests : IClassFixture<LycheeWebApplicationF
         var response = await learner.GetAsync("/api/learner/history");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var entries = await response.Content.ReadFromJsonAsync<List<HistoryEntryResponse>>();
-        var entry = entries!.Single(e => e.TrackId == trackId);
+        var entries = await response.Content.ReadFromJsonAsync<PagedResponse<HistoryEntryResponse>>();
+        var entry = entries!.Items.Single(e => e.TrackId == trackId);
         Assert.Equal("Practice", entry.PracticeType);
         Assert.Equal("InProgress", entry.Status);
         Assert.Equal("The First Snowfall", entry.TrackTitle);
@@ -115,8 +115,8 @@ public class LearnerHistoryControllerTests : IClassFixture<LycheeWebApplicationF
 
         var response = await learner.GetAsync("/api/learner/history");
 
-        var entries = await response.Content.ReadFromJsonAsync<List<HistoryEntryResponse>>();
-        var entry = entries!.Single(e => e.TrackId == trackId);
+        var entries = await response.Content.ReadFromJsonAsync<PagedResponse<HistoryEntryResponse>>();
+        var entry = entries!.Items.Single(e => e.TrackId == trackId);
         Assert.Equal("Completed", entry.Status);
         Assert.Null(entry.Accuracy);
     }
@@ -133,8 +133,8 @@ public class LearnerHistoryControllerTests : IClassFixture<LycheeWebApplicationF
 
         var response = await learner.GetAsync("/api/learner/history");
 
-        var entries = await response.Content.ReadFromJsonAsync<List<HistoryEntryResponse>>();
-        var entry = entries!.Single(e => e.TrackId == trackId && e.PracticeType == "Recitation");
+        var entries = await response.Content.ReadFromJsonAsync<PagedResponse<HistoryEntryResponse>>();
+        var entry = entries!.Items.Single(e => e.TrackId == trackId && e.PracticeType == "Recitation");
         Assert.Equal("Completed", entry.Status);
         Assert.Equal(1.0, entry.Accuracy);
         Assert.Null(entry.CurrentSentenceIndex);
@@ -152,15 +152,15 @@ public class LearnerHistoryControllerTests : IClassFixture<LycheeWebApplicationF
             new { submittedText = "First sentence Second sentence", score = 1.0, words = new List<object>(), qualifiedSentenceIds = new List<Guid>() });
 
         var beforeResponse = await learner.GetAsync("/api/learner/history");
-        var beforeEntries = await beforeResponse.Content.ReadFromJsonAsync<List<HistoryEntryResponse>>();
-        Assert.Contains(beforeEntries!, e => e.TrackId == trackId && e.PracticeType == "Practice");
-        Assert.Contains(beforeEntries!, e => e.TrackId == trackId && e.PracticeType == "Recitation");
+        var beforeEntries = await beforeResponse.Content.ReadFromJsonAsync<PagedResponse<HistoryEntryResponse>>();
+        Assert.Contains(beforeEntries!.Items, e => e.TrackId == trackId && e.PracticeType == "Practice");
+        Assert.Contains(beforeEntries!.Items, e => e.TrackId == trackId && e.PracticeType == "Recitation");
 
         await admin.PatchAsJsonAsync($"/api/admin/exercises/{exerciseId}/publish-status", new { isPublished = false });
 
         var afterResponse = await learner.GetAsync("/api/learner/history");
-        var afterEntries = await afterResponse.Content.ReadFromJsonAsync<List<HistoryEntryResponse>>();
-        Assert.DoesNotContain(afterEntries!, e => e.TrackId == trackId);
+        var afterEntries = await afterResponse.Content.ReadFromJsonAsync<PagedResponse<HistoryEntryResponse>>();
+        Assert.DoesNotContain(afterEntries!.Items, e => e.TrackId == trackId);
     }
 
     [Fact]
@@ -178,9 +178,45 @@ public class LearnerHistoryControllerTests : IClassFixture<LycheeWebApplicationF
 
         var response = await learner.GetAsync("/api/learner/history");
 
-        var entries = await response.Content.ReadFromJsonAsync<List<HistoryEntryResponse>>();
-        var relevant = entries!.Where(e => e.TrackId == firstTrackId || e.TrackId == secondTrackId).ToList();
+        var entries = await response.Content.ReadFromJsonAsync<PagedResponse<HistoryEntryResponse>>();
+        var relevant = entries!.Items.Where(e => e.TrackId == firstTrackId || e.TrackId == secondTrackId).ToList();
         Assert.Equal(secondTrackId, relevant[0].TrackId); // started later, sorts first
         Assert.Equal(firstTrackId, relevant[1].TrackId);
+    }
+
+    [Fact]
+    public async Task List_PagesAcrossBothPracticeAndRecitationSources()
+    {
+        // Three entries from the two different underlying tables (two Practice, one Recitation),
+        // paged two-at-a-time — this exercises the actual Skip/Take/Concat translation, not just
+        // its default page=1 behavior.
+        var admin = AdminClient();
+        var firstTrackId = await CreateTrackWithTwoSentencesAsync(admin);
+        var secondTrackId = await CreateTrackWithTwoSentencesAsync(admin);
+        var thirdTrackId = await CreateTrackWithTwoSentencesAsync(admin);
+        var userToken = await CreateLearnerTokenAsync();
+        var learner = await LearnerClientAsync(userToken);
+
+        await learner.PostAsync($"/api/learner/tracks/{firstTrackId}/practice-session/start", null);
+        await learner.PostAsJsonAsync($"/api/learner/tracks/{secondTrackId}/recitation-attempts",
+            new { submittedText = "First sentence Second sentence", score = 1.0, words = new List<object>(), qualifiedSentenceIds = new List<Guid>() });
+        await learner.PostAsync($"/api/learner/tracks/{thirdTrackId}/practice-session/start", null);
+
+        var page1 = await (await learner.GetAsync("/api/learner/history?page=1&pageSize=2"))
+            .Content.ReadFromJsonAsync<PagedResponse<HistoryEntryResponse>>();
+        var page2 = await (await learner.GetAsync("/api/learner/history?page=2&pageSize=2"))
+            .Content.ReadFromJsonAsync<PagedResponse<HistoryEntryResponse>>();
+
+        Assert.Equal(1, page1!.Page);
+        Assert.Equal(2, page1.PageSize);
+        Assert.Equal(2, page1.Items.Count);
+        Assert.True(page1.TotalCount >= 3);
+        Assert.Equal(thirdTrackId, page1.Items[0].TrackId); // most recent first
+        Assert.Equal(secondTrackId, page1.Items[1].TrackId);
+
+        Assert.Equal(2, page2!.Page);
+        Assert.Contains(page2.Items, e => e.TrackId == firstTrackId);
+        // No row appears on both pages.
+        Assert.DoesNotContain(page2.Items, e => page1.Items.Select(x => x.TrackId).Contains(e.TrackId));
     }
 }

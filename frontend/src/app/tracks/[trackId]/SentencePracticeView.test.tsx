@@ -8,8 +8,8 @@ const track: LearnerTrack = {
   id: 'track-1', unitId: 'unit-1', exerciseId: 'exercise-1', title: 'Test Track', description: null, exerciseTitle: 'Test Exercise', level: 'A1', wordsPerMinute: 120, duration: '00:00:04',
   audioUrl: 'https://example.test/audio.mp3',
   sentences: [
-    { id: 's1', index: 1, text: 'Hello there.', startTime: '00:00:00', endTime: '00:00:02', isFavorited: false },
-    { id: 's2', index: 2, text: 'Good morning.', startTime: '00:00:02', endTime: '00:00:04', isFavorited: false }
+    { id: 's1', index: 1, text: 'Hello there.', startTime: '00:00:00', endTime: '00:00:02' },
+    { id: 's2', index: 2, text: 'Good morning.', startTime: '00:00:02', endTime: '00:00:04' }
   ],
   nextTrackId: null,
   isFavorited: false
@@ -38,6 +38,17 @@ describe('SentencePracticeView', () => {
 
     expect(screen.getByRole('button', { name: /^check$/i })).toBeDisabled()
     await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
+  })
+
+  it('does not autoplay the very first sentence on entering the view — the learner presses Play themselves', async () => {
+    mockFetchSequence([
+      new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 })
+    ])
+
+    render(<SentencePracticeView track={track} onCompleted={vi.fn()} onBack={vi.fn()} audioObjectUrl="blob:fake" audioError={null}/>)
+    await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
+
+    expect(window.HTMLMediaElement.prototype.play).not.toHaveBeenCalled()
   })
 
   it('calls onBack when the Back button is clicked', async () => {
@@ -74,7 +85,7 @@ describe('SentencePracticeView', () => {
     expect(screen.queryByText(/so close/i)).not.toBeInTheDocument()
   })
 
-  it('on a correct answer, hides the diff text and shows only the checkmark and message', async () => {
+  it('on a correct answer, shows the checkmark and message alongside the text in black', async () => {
     mockFetchSequence([
       new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 }),
       new Response(JSON.stringify({ accuracyScore: 1, isCorrect: true, words: [{ word: 'Hello', status: 'Correct' }, { word: 'there.', status: 'Correct' }] }), { status: 200 })
@@ -87,7 +98,82 @@ describe('SentencePracticeView', () => {
     fireEvent.click(screen.getByRole('button', { name: /^check$/i }))
 
     expect(await screen.findByText('Nice — that\'s right!')).toBeInTheDocument()
-    expect(screen.queryByText('Hello')).not.toBeInTheDocument()
+    expect(screen.getByText('Hello')).toHaveStyle({ color: 'var(--ink)' })
+    expect(screen.getByText('there.')).toHaveStyle({ color: 'var(--ink)' })
+  })
+
+  it('typing again after a correct Check hides the result and reverts to Check/Skip', async () => {
+    mockFetchSequence([
+      new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 }),
+      new Response(JSON.stringify({ accuracyScore: 1, isCorrect: true, words: [{ word: 'Hello', status: 'Correct' }, { word: 'there.', status: 'Correct' }] }), { status: 200 })
+    ])
+
+    render(<SentencePracticeView track={track} onCompleted={vi.fn()} onBack={vi.fn()} audioObjectUrl="blob:fake" audioError={null}/>)
+    await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Hello there.' } })
+    fireEvent.click(screen.getByRole('button', { name: /^check$/i }))
+    await screen.findByText('Nice — that\'s right!')
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Hello there. more' } })
+
+    expect(screen.queryByText('Nice — that\'s right!')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^check$/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^skip$/i })).toBeInTheDocument()
+  })
+
+  it('speaking again after a correct Check hides the result too', async () => {
+    class FakeSpeechRecognition {
+      continuous = false
+      interimResults = false
+      onresult: ((event: unknown) => void) | null = null
+      onend: (() => void) | null = null
+      start = vi.fn()
+      stop = vi.fn()
+    }
+    vi.stubGlobal('SpeechRecognition', vi.fn().mockImplementation(function (this: unknown) {
+      return new FakeSpeechRecognition()
+    }))
+
+    mockFetchSequence([
+      new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 }),
+      new Response(JSON.stringify({ accuracyScore: 1, isCorrect: true, words: [{ word: 'Hello', status: 'Correct' }, { word: 'there.', status: 'Correct' }] }), { status: 200 })
+    ])
+
+    render(<SentencePracticeView track={track} onCompleted={vi.fn()} onBack={vi.fn()} audioObjectUrl="blob:fake" audioError={null}/>)
+    await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Hello there.' } })
+    fireEvent.click(screen.getByRole('button', { name: /^check$/i }))
+    await screen.findByText('Nice — that\'s right!')
+
+    fireEvent.click(screen.getByRole('button', { name: /use microphone/i }))
+
+    expect(screen.queryByText('Nice — that\'s right!')).not.toBeInTheDocument()
+
+    vi.unstubAllGlobals()
+  })
+
+  it('clicking Next after a correct answer autoplays the next sentence', async () => {
+    mockFetchSequence([
+      new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 }),
+      new Response(JSON.stringify({ accuracyScore: 1, isCorrect: true, words: [{ word: 'Hello', status: 'Correct' }, { word: 'there.', status: 'Correct' }] }), { status: 200 }),
+      new Response(JSON.stringify({ currentSentenceIndex: 1, isCompleted: false, overallAccuracy: null }), { status: 200 })
+    ])
+
+    render(<SentencePracticeView track={track} onCompleted={vi.fn()} onBack={vi.fn()} audioObjectUrl="blob:fake" audioError={null}/>)
+    await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Hello there.' } })
+    fireEvent.click(screen.getByRole('button', { name: /^check$/i }))
+    await screen.findByText('Nice — that\'s right!')
+
+    fireEvent.click(screen.getByRole('button', { name: /^next$/i }))
+
+    await waitFor(() => expect(fetch).toHaveBeenLastCalledWith('/api/learner/practice-sessions/session-1/advance', expect.objectContaining({
+      body: JSON.stringify({ toIndex: 1 })
+    })))
+    await waitFor(() => expect(window.HTMLMediaElement.prototype.play).toHaveBeenCalled())
   })
 
   it('on a correct answer, replaces the typed text with the clean reference sentence', async () => {
@@ -170,7 +256,7 @@ describe('SentencePracticeView', () => {
     expect(window.HTMLMediaElement.prototype.play).toHaveBeenCalled()
   })
 
-  it('jumps to a clicked sentence in the list', async () => {
+  it('jumps to a clicked sentence in the list and autoplays it', async () => {
     mockFetchSequence([
       new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 }),
       new Response(JSON.stringify({ currentSentenceIndex: 1, isCompleted: false, overallAccuracy: null }), { status: 200 })
@@ -184,6 +270,7 @@ describe('SentencePracticeView', () => {
     await waitFor(() => expect(fetch).toHaveBeenLastCalledWith('/api/learner/practice-sessions/session-1/advance', expect.objectContaining({
       body: JSON.stringify({ toIndex: 1 })
     })))
+    await waitFor(() => expect(window.HTMLMediaElement.prototype.play).toHaveBeenCalled())
   })
 
   it('clicking a Progress number only navigates, without marking anything done', async () => {
@@ -332,7 +419,7 @@ describe('SentencePracticeView', () => {
     await waitFor(() => expect(window.HTMLMediaElement.prototype.play).toHaveBeenCalled())
   })
 
-  it('Skip does not autoplay the next sentence', async () => {
+  it('Skip navigates to the next sentence and autoplays it', async () => {
     mockFetchSequence([
       new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 }),
       new Response(JSON.stringify({ currentSentenceIndex: 1, isCompleted: false, overallAccuracy: null }), { status: 200 })
@@ -346,7 +433,7 @@ describe('SentencePracticeView', () => {
     await waitFor(() => expect(fetch).toHaveBeenLastCalledWith('/api/learner/practice-sessions/session-1/advance', expect.objectContaining({
       body: JSON.stringify({ toIndex: 1 })
     })))
-    expect(window.HTMLMediaElement.prototype.play).not.toHaveBeenCalled()
+    await waitFor(() => expect(window.HTMLMediaElement.prototype.play).toHaveBeenCalled())
   })
 
   it('the answer field is a multi-line textarea with 3 default rows', async () => {
@@ -438,6 +525,49 @@ describe('SentencePracticeView', () => {
     fakeInstance!.onend!()
     await waitFor(() => expect(screen.queryByRole('button', { name: /use microphone/i })).toBeInTheDocument())
     expect(screen.getByRole('textbox')).toHaveValue('Hello there')
+
+    vi.unstubAllGlobals()
+  })
+
+  it('advancing to the next sentence while recording starts a fresh transcript segment, not accumulating the old sentence\'s words', async () => {
+    class FakeSpeechRecognition {
+      continuous = false
+      interimResults = false
+      onresult: ((event: unknown) => void) | null = null
+      onend: (() => void) | null = null
+      start = vi.fn()
+      stop = vi.fn()
+    }
+    let fakeInstance: FakeSpeechRecognition
+    vi.stubGlobal('SpeechRecognition', vi.fn().mockImplementation(function (this: unknown) {
+      fakeInstance = new FakeSpeechRecognition()
+      return fakeInstance
+    }))
+
+    mockFetchSequence([
+      new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 }),
+      new Response(JSON.stringify({ currentSentenceIndex: 1, isCompleted: false, overallAccuracy: null }), { status: 200 })
+    ])
+
+    render(<SentencePracticeView track={track} onCompleted={vi.fn()} onBack={vi.fn()} audioObjectUrl="blob:fake" audioError={null}/>)
+    await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
+
+    fireEvent.click(screen.getByRole('button', { name: /use microphone/i }))
+    fakeInstance!.onresult!({ results: [[{ transcript: 'Hello there' }]] })
+    await waitFor(() => expect(screen.getByRole('textbox')).toHaveValue('Hello there'))
+
+    fireEvent.click(screen.getByRole('button', { name: /next sentence/i }))
+    // Wait for the advance to actually land (session state committed, not just the fetch call
+    // recorded) before firing more speech — otherwise this races the async advance and the
+    // segment-reset effect it triggers.
+    await screen.findByText('Sentence 2 / 2')
+
+    // The underlying Web Speech API's event.results is cumulative and never shrinks — this
+    // fires with BOTH the old sentence's finalized result and a newly recognized one, exactly
+    // as the real API would mid-recording across a sentence boundary.
+    fakeInstance!.onresult!({ results: [[{ transcript: 'Hello there' }], [{ transcript: 'Good morning' }]] })
+
+    await waitFor(() => expect(screen.getByRole('textbox')).toHaveValue('Good morning'))
 
     vi.unstubAllGlobals()
   })
@@ -668,22 +798,5 @@ describe('SentencePracticeView', () => {
 
       vi.unstubAllGlobals()
     })
-  })
-
-  it('toggles the current sentence favorite and calls the favorite endpoint', async () => {
-    const fetchMock = mockFetchSequence([
-      new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 }),
-      new Response(null, { status: 204 })
-    ])
-
-    render(<SentencePracticeView track={track} onCompleted={vi.fn()} onBack={vi.fn()} audioObjectUrl="blob:fake" audioError={null}/>)
-    await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
-
-    fireEvent.click(screen.getByRole('button', { name: 'Add sentence to favorites' }))
-
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenLastCalledWith('/api/learner/sentences/s1/favorite', { method: 'PUT' })
-    })
-    expect(await screen.findByRole('button', { name: 'Remove sentence from favorites' })).toBeInTheDocument()
   })
 })

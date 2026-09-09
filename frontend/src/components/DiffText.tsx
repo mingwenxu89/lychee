@@ -20,17 +20,18 @@ function wordStyle(status: WordDiff['status']): React.CSSProperties {
   }
 }
 
-// The sentence-dictation view wants a simpler read: a matched word is green,
-// anything that didn't match (wrong or skipped) is plain black text with no
-// special flagging, and anything the learner typed beyond the reference
-// sentence isn't shown at all rather than struck through.
+// The sentence-dictation view wants a simpler read: a matched word is plain
+// black text, a wrong/skipped word is bold red, and anything the learner
+// typed beyond the reference sentence isn't shown at all rather than struck
+// through. (With `firstMismatchOnly`, only the first wrong/skipped word keeps
+// this red styling — see below.)
 function dictationWordStyle(status: WordDiff['status']): React.CSSProperties {
   switch (status) {
     case 'Correct':
-      return { color: 'var(--leaf-dark)' }
+      return { color: 'var(--ink)' }
     case 'Incorrect':
     case 'Missing':
-      return { color: 'var(--ink)' }
+      return { color: 'var(--error)', fontWeight: 700 }
     case 'Extra':
       return {}
   }
@@ -40,7 +41,8 @@ export function DiffText({
   words,
   variant = 'default',
   correctColor,
-  incorrectColor
+  incorrectColor,
+  firstMismatchOnly = false
 }: {
   words: WordDiff[]
   variant?: 'default' | 'dictation'
@@ -49,14 +51,24 @@ export function DiffText({
   // from wrong purely by color, no checkmark) without changing every other DiffText usage.
   correctColor?: string
   incorrectColor?: string
+  // Dictation variant only: flag just the first Incorrect/Missing word instead of every one,
+  // so the learner sees where they first went wrong without every later mismatch also
+  // lighting up red. Later mismatches render as plain text, same as a Correct word.
+  firstMismatchOnly?: boolean
 }) {
   const visibleWords = variant === 'dictation' ? words.filter((w) => w.status !== 'Extra') : words
   const styleFor = variant === 'dictation' ? dictationWordStyle : wordStyle
 
-  function resolvedStyle(status: WordDiff['status']): React.CSSProperties {
-    const base = styleFor(status)
-    if (correctColor && status === 'Correct') return { ...base, color: correctColor }
-    if (incorrectColor && (status === 'Incorrect' || status === 'Missing')) return { ...base, color: incorrectColor }
+  const firstMismatchIndex = firstMismatchOnly
+    ? visibleWords.findIndex((w) => w.status === 'Incorrect' || w.status === 'Missing')
+    : -1
+
+  function resolvedStyle(word: WordDiff, index: number): React.CSSProperties {
+    const isMismatch = word.status === 'Incorrect' || word.status === 'Missing'
+    const displayStatus = isMismatch && firstMismatchOnly && index !== firstMismatchIndex ? 'Correct' : word.status
+    const base = styleFor(displayStatus)
+    if (correctColor && displayStatus === 'Correct') return { ...base, color: correctColor }
+    if (incorrectColor && (displayStatus === 'Incorrect' || displayStatus === 'Missing')) return { ...base, color: incorrectColor }
     return base
   }
 
@@ -67,7 +79,7 @@ export function DiffText({
         // selecting and copying this text reproduces actual spaces rather than
         // running every word together.
         <span key={i}>
-          <span data-status={w.status} style={resolvedStyle(w.status)}>{w.word}</span>
+          <span data-status={w.status} style={resolvedStyle(w, i)}>{w.word}</span>
           {i < visibleWords.length - 1 ? ' ' : ''}
         </span>
       ))}
