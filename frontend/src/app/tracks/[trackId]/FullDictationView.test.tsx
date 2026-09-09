@@ -1,5 +1,5 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
-import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { FullDictationView } from './FullDictationView'
 import type { LearnerTrack } from './page'
 
@@ -74,6 +74,15 @@ beforeEach(() => {
   window.HTMLMediaElement.prototype.play = vi.fn().mockResolvedValue(undefined)
   window.HTMLMediaElement.prototype.pause = vi.fn()
   window.HTMLElement.prototype.scrollIntoView = vi.fn()
+})
+
+// Safety net for the couple of tests below that use vi.useFakeTimers() to simulate the
+// setTimeout-scheduled sentence-boundary stop: if a test throws before reaching its own
+// vi.useRealTimers() call, fake timers would otherwise stay active for every test that runs
+// after it in this file (and even in later files sharing the same worker), silently breaking
+// unrelated async assertions like screen.findByText's polling.
+afterEach(() => {
+  vi.useRealTimers()
 })
 
 describe('FullDictationView — Blind round', () => {

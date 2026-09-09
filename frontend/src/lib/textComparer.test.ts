@@ -101,6 +101,25 @@ describe('textComparer', () => {
     expect(result.isExactMatch).toBe(true)
   })
 
+  it('displays a reference contraction as written, not split into its lowercase expansion', () => {
+    // Internally "I'll" is compared as two units ("i" / "will") so it can match a submission
+    // that spells it out, but only the first unit should carry real display text — DiffText
+    // relies on the second one being empty to skip rendering it (see DiffText.test.tsx).
+    const matched = compare("I'll go home", 'I will go home')
+    expect(matched.words).toEqual([
+      { word: "I'll", status: 'Correct' },
+      { word: '', status: 'Correct' },
+      { word: 'go', status: 'Correct' },
+      { word: 'home', status: 'Correct' }
+    ])
+
+    // Same thing when the contraction word itself doesn't match — it must still show as
+    // written ("I'm"), never as "i am".
+    const mismatched = compare("I'm ready", 'You are ready')
+    expect(mismatched.words[0]).toEqual({ word: "I'm", status: 'Incorrect' })
+    expect(mismatched.words[1]).toEqual({ word: '', status: 'Incorrect' })
+  })
+
   it('preserves punctuation attached to displayed reference words', () => {
     const result = compare('I saw the first snowfall, right?', 'I saw the last snowfall')
 

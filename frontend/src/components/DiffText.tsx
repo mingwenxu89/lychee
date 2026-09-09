@@ -56,7 +56,12 @@ export function DiffText({
   // lighting up red. Later mismatches render as plain text, same as a Correct word.
   firstMismatchOnly?: boolean
 }) {
-  const visibleWords = variant === 'dictation' ? words.filter((w) => w.status !== 'Extra') : words
+  // An empty word happens when textComparer split a contraction (e.g. "I'm" -> "i" + "am")
+  // for comparison purposes but only attached the real surface text to the first part, so the
+  // second part has nothing to show — skip it entirely rather than rendering a blank span with
+  // its own space, which would show up as an awkward double space.
+  const nonEmptyWords = words.filter((w) => w.word !== '')
+  const visibleWords = variant === 'dictation' ? nonEmptyWords.filter((w) => w.status !== 'Extra') : nonEmptyWords
   const styleFor = variant === 'dictation' ? dictationWordStyle : wordStyle
 
   const firstMismatchIndex = firstMismatchOnly

@@ -52,13 +52,6 @@ const CONTRACTION_EXPANSIONS: Record<string, string> = {
   "hadn't": 'had not'
 }
 
-function expandContractions(text: string): string {
-  return text.replace(/[A-Za-z]+['’][A-Za-z]+/g, (match) => {
-    const key = match.replace('’', "'").toLowerCase()
-    return CONTRACTION_EXPANSIONS[key] ?? match
-  })
-}
-
 // Number words are folded to their digit value before comparison (see mergeNumberWordRuns),
 // so "10" and "ten" — or "twenty-one" and "21" — compare as the same word. Only cardinals; ordinals
 // ("first", "1st") aren't handled since they weren't asked for. "and" is a scale-only connector
@@ -136,6 +129,29 @@ function tokenize(text: string): Token[] {
   return matches.map((display) => ({ core: display.match(/^[A-Za-z0-9']+/)?.[0] ?? display, display }))
 }
 
+// Same as tokenize(), but a word that's a known contraction is additionally split into its
+// expanded parts for comparison (so "I'm" lines up with someone typing "I am", or vice versa)
+// — this must happen per-token, not by expanding the whole string first, because expanding
+// first would also become each part's `display`, and the diff would show "i am" (lowercase,
+// split in two) instead of the original "I'm". Only the first expanded part keeps the real
+// surface text as its display; later parts get an empty display so they render as nothing
+// (see DiffText, which skips empty-display words) — each part still gets its own Correct/
+// Incorrect/Missing status, so scoring is unaffected, only what's shown changes.
+function tokenizeAndExpand(text: string): Token[] {
+  const matches = text.match(/[A-Za-z0-9'’]+[.,!?;:]*/g) ?? []
+  const result: Token[] = []
+  for (const raw of matches) {
+    const core = raw.match(/^[A-Za-z0-9'’]+/)?.[0] ?? raw
+    const expansion = CONTRACTION_EXPANSIONS[core.replace('’', "'").toLowerCase()]
+    if (!expansion) {
+      result.push({ core, display: raw })
+      continue
+    }
+    expansion.split(' ').forEach((part, i) => result.push({ core: part, display: i === 0 ? raw : '' }))
+  }
+  return result
+}
+
 function normalize(word: string): string {
   return word.toLowerCase()
 }
@@ -145,11 +161,8 @@ export function countWords(text: string): number {
 }
 
 export function compare(referenceText: string, submittedText: string): ComparisonResult {
-  const expandedReference = expandContractions(referenceText)
-  const expandedSubmitted = expandContractions(submittedText)
-
-  const refWords = mergeNumberWordRuns(tokenize(expandedReference))
-  const subWords = mergeNumberWordRuns(tokenize(expandedSubmitted))
+  const refWords = mergeNumberWordRuns(tokenizeAndExpand(referenceText))
+  const subWords = mergeNumberWordRuns(tokenizeAndExpand(submittedText))
   const refNorm = refWords.map((t) => normalize(t.core))
   const subNorm = subWords.map((t) => normalize(t.core))
 

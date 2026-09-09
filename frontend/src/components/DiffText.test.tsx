@@ -63,6 +63,20 @@ describe('DiffText', () => {
     expect(screen.getByText('I')).toHaveStyle({ color: 'var(--ink)' })
   })
 
+  it('skips an empty-display word with no extra space (e.g. the unattached second half of an expanded contraction like "I\'m")', () => {
+    const { container } = render(
+      <DiffText
+        words={[
+          { word: "I'm", status: 'Correct' },
+          { word: '', status: 'Correct' },
+          { word: 'ready', status: 'Correct' }
+        ]}
+      />
+    )
+
+    expect(container.textContent).toBe("I'm ready")
+  })
+
   it('separates words with a real space character so the text is copyable, not just visually spaced by CSS', () => {
     const { container } = render(
       <DiffText
