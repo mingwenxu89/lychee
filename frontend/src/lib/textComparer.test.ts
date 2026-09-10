@@ -120,6 +120,23 @@ describe('textComparer', () => {
     expect(mismatched.words[1]).toEqual({ word: '', status: 'Incorrect' })
   })
 
+  it('does not count a missing or wrong apostrophe as an error', () => {
+    // A contraction typed without its apostrophe still resolves to the same two-word expansion
+    // as the properly-punctuated reference, rather than comparing as one unrelated word against
+    // the reference's two expanded words.
+    const missingApostropheInContraction = compare("I don't know", 'I dont know')
+    expect(missingApostropheInContraction.isExactMatch).toBe(true)
+    expect(missingApostropheInContraction.words.map((w) => w.status)).toEqual(['Correct', 'Correct', 'Correct', 'Correct'])
+
+    // A possessive (not a contraction at all, so nothing to expand) typed without its apostrophe.
+    const missingApostropheInPossessive = compare("That is Sarah's book", "That is Sarahs book")
+    expect(missingApostropheInPossessive.isExactMatch).toBe(true)
+
+    // The reverse direction: reference has no apostrophe, submission adds one where it doesn't belong.
+    const extraApostrophe = compare('The dogs bark', "The dog's bark")
+    expect(extraApostrophe.isExactMatch).toBe(true)
+  })
+
   it('preserves punctuation attached to displayed reference words', () => {
     const result = compare('I saw the first snowfall, right?', 'I saw the last snowfall')
 

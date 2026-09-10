@@ -52,6 +52,14 @@ const CONTRACTION_EXPANSIONS: Record<string, string> = {
   "hadn't": 'had not'
 }
 
+// Looked up with the apostrophe already stripped from both sides (see tokenizeAndExpand), so a
+// missing/wrong apostrophe — "dont" for "don't", or a smart quote autocorrect turned into
+// something else — still resolves to the same expansion instead of comparing as an unrelated
+// single word against the reference's two expanded words.
+const CONTRACTION_EXPANSIONS_BY_STRIPPED_KEY: Record<string, string> = Object.fromEntries(
+  Object.entries(CONTRACTION_EXPANSIONS).map(([key, expansion]) => [key.replace(/'/g, ''), expansion])
+)
+
 // Number words are folded to their digit value before comparison (see mergeNumberWordRuns),
 // so "10" and "ten" — or "twenty-one" and "21" — compare as the same word. Only cardinals; ordinals
 // ("first", "1st") aren't handled since they weren't asked for. "and" is a scale-only connector
@@ -142,7 +150,7 @@ function tokenizeAndExpand(text: string): Token[] {
   const result: Token[] = []
   for (const raw of matches) {
     const core = raw.match(/^[A-Za-z0-9'’]+/)?.[0] ?? raw
-    const expansion = CONTRACTION_EXPANSIONS[core.replace('’', "'").toLowerCase()]
+    const expansion = CONTRACTION_EXPANSIONS_BY_STRIPPED_KEY[core.replace(/['’]/g, '').toLowerCase()]
     if (!expansion) {
       result.push({ core, display: raw })
       continue
@@ -152,8 +160,13 @@ function tokenizeAndExpand(text: string): Token[] {
   return result
 }
 
+// Apostrophes are stripped here (not just in the contraction lookup above) so any other
+// apostrophe mismatch — a possessive typed without one ("Sarahs" for "Sarah's"), a smart vs.
+// straight quote, one missing from a contraction that isn't in the expansion table — still
+// compares as the same word. Punctuation other than the apostrophe never reaches this function
+// at all: tokenize()/tokenizeAndExpand() only capture it into `display`, never into `core`.
 function normalize(word: string): string {
-  return word.toLowerCase()
+  return word.toLowerCase().replace(/['’]/g, '')
 }
 
 export function countWords(text: string): number {
