@@ -40,6 +40,62 @@ describe('DiffText', () => {
     expect(screen.queryByText('extra')).not.toBeInTheDocument()
   })
 
+  it('in the dictation variant, an Extra word inserted between two otherwise-correct words flags the next word red instead of vanishing without a trace', () => {
+    render(
+      <DiffText
+        variant="dictation"
+        words={[
+          { word: 'I', status: 'Correct' },
+          { word: 'really', status: 'Extra' },
+          { word: 'saw', status: 'Correct' },
+          { word: 'snow', status: 'Correct' }
+        ]}
+      />
+    )
+
+    expect(screen.queryByText('really')).not.toBeInTheDocument()
+    // "saw" is otherwise a perfectly correct word, but since it's the closest visible word to
+    // where the extra "really" was inserted, it's the one that gets flagged as the error.
+    expect(screen.getByText('saw')).toHaveStyle({ color: 'var(--error)', fontWeight: '700' })
+    expect(screen.getByText('snow')).toHaveStyle({ color: 'var(--ink)' })
+  })
+
+  it('in the dictation variant, a leading Extra word (before the first reference word) is still hidden with no word flagged', () => {
+    render(
+      <DiffText
+        variant="dictation"
+        words={[
+          { word: 'well', status: 'Extra' },
+          { word: 'I', status: 'Correct' },
+          { word: 'saw', status: 'Correct' }
+        ]}
+      />
+    )
+
+    expect(screen.queryByText('well')).not.toBeInTheDocument()
+    expect(screen.getByText('I')).toHaveStyle({ color: 'var(--ink)' })
+    expect(screen.getByText('saw')).toHaveStyle({ color: 'var(--ink)' })
+  })
+
+  it('in the dictation variant, a trailing Extra word (after the last reference word) is still hidden with no word flagged', () => {
+    render(
+      <DiffText
+        variant="dictation"
+        words={[
+          { word: 'I', status: 'Correct' },
+          { word: 'saw', status: 'Correct' },
+          { word: 'snow', status: 'Correct' },
+          { word: 'yesterday', status: 'Extra' }
+        ]}
+      />
+    )
+
+    expect(screen.queryByText('yesterday')).not.toBeInTheDocument()
+    expect(screen.getByText('I')).toHaveStyle({ color: 'var(--ink)' })
+    expect(screen.getByText('saw')).toHaveStyle({ color: 'var(--ink)' })
+    expect(screen.getByText('snow')).toHaveStyle({ color: 'var(--ink)' })
+  })
+
   it('with firstMismatchOnly, flags only the first Incorrect/Missing word and renders later mismatches as plain text', () => {
     render(
       <DiffText

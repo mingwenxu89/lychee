@@ -37,6 +37,37 @@ function dictationWordStyle(status: WordDiff['status']): React.CSSProperties {
   }
 }
 
+// The dictation variant never shows the learner's own extra word (there's no reference-text
+// slot to put it in) — but silently dropping it left an interior insertion completely
+// invisible: with every reference word otherwise Correct, the diff looked fully right even
+// though the sentence wasn't an exact match (an Extra word *inside* the reference breaks
+// computeIsExactMatch's contiguity check the same as a wrong word would). This flags the next
+// reference word instead, as the closest visible anchor to where the insertion happened.
+// Leading/trailing extras are left alone — computeIsExactMatch already allows those, so they
+// never cause a diff box to show up in the first place.
+function flagInteriorExtras(list: WordDiff[]): WordDiff[] {
+  const hasCorrectAfter: boolean[] = new Array(list.length).fill(false)
+  for (let i = list.length - 1, seenCorrect = false; i >= 0; i--) {
+    hasCorrectAfter[i] = seenCorrect
+    if (list[i].status === 'Correct') seenCorrect = true
+  }
+
+  const result: WordDiff[] = []
+  let seenCorrect = false
+  let flagNextWord = false
+  for (let i = 0; i < list.length; i++) {
+    const w = list[i]
+    if (w.status === 'Extra') {
+      if (seenCorrect && hasCorrectAfter[i]) flagNextWord = true
+      continue
+    }
+    if (w.status === 'Correct') seenCorrect = true
+    result.push(flagNextWord ? { word: w.word, status: 'Incorrect' } : w)
+    flagNextWord = false
+  }
+  return result
+}
+
 export function DiffText({
   words,
   variant = 'default',
@@ -61,7 +92,7 @@ export function DiffText({
   // second part has nothing to show — skip it entirely rather than rendering a blank span with
   // its own space, which would show up as an awkward double space.
   const nonEmptyWords = words.filter((w) => w.word !== '')
-  const visibleWords = variant === 'dictation' ? nonEmptyWords.filter((w) => w.status !== 'Extra') : nonEmptyWords
+  const visibleWords = variant === 'dictation' ? flagInteriorExtras(nonEmptyWords) : nonEmptyWords
   const styleFor = variant === 'dictation' ? dictationWordStyle : wordStyle
 
   const firstMismatchIndex = firstMismatchOnly
