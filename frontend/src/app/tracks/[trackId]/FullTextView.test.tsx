@@ -21,8 +21,26 @@ beforeEach(() => {
 })
 
 describe('FullTextView', () => {
+  it('disables Play and shows a loading message while the track audio is still downloading', () => {
+    render(<FullTextView track={track} audioObjectUrl={null} audioError={null} onStartRecite={vi.fn()} onStartFullDictation={vi.fn()} onStartBySentence={vi.fn()} />)
+
+    expect(screen.getByText('Loading audio...')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^play$/i })).toBeDisabled()
+
+    fireEvent.click(screen.getByRole('button', { name: /^play$/i }))
+    expect(window.HTMLMediaElement.prototype.play).not.toHaveBeenCalled()
+  })
+
+  it('shows an error and keeps Play disabled if the track audio fails to download', () => {
+    render(<FullTextView track={track} audioObjectUrl={null} audioError="Failed to download audio for this track." onStartRecite={vi.fn()} onStartFullDictation={vi.fn()} onStartBySentence={vi.fn()} />)
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Failed to download audio for this track.')
+    expect(screen.queryByText('Loading audio...')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^play$/i })).toBeDisabled()
+  })
+
   it('hides the transcript by default and reveals it on click', () => {
-    render(<FullTextView track={track} onStartRecite={vi.fn()} onStartFullDictation={vi.fn()} onStartBySentence={vi.fn()} />)
+    render(<FullTextView track={track} audioObjectUrl="blob:fake" audioError={null} onStartRecite={vi.fn()} onStartFullDictation={vi.fn()} onStartBySentence={vi.fn()} />)
 
     expect(screen.queryByText('Hello there.')).not.toBeInTheDocument()
 
@@ -32,7 +50,7 @@ describe('FullTextView', () => {
   })
 
   it('lets the user change playback speed', () => {
-    render(<FullTextView track={track} onStartRecite={vi.fn()} onStartFullDictation={vi.fn()} onStartBySentence={vi.fn()} />)
+    render(<FullTextView track={track} audioObjectUrl="blob:fake" audioError={null} onStartRecite={vi.fn()} onStartFullDictation={vi.fn()} onStartBySentence={vi.fn()} />)
 
     fireEvent.change(screen.getByLabelText(/speed/i), { target: { value: '1.5' } })
 
@@ -40,7 +58,7 @@ describe('FullTextView', () => {
   })
 
   it('clicking anywhere on a revealed sentence row seeks to and plays that sentence', () => {
-    render(<FullTextView track={track} onStartRecite={vi.fn()} onStartFullDictation={vi.fn()} onStartBySentence={vi.fn()} />)
+    render(<FullTextView track={track} audioObjectUrl="blob:fake" audioError={null} onStartRecite={vi.fn()} onStartFullDictation={vi.fn()} onStartBySentence={vi.fn()} />)
     fireEvent.click(screen.getByRole('button', { name: /show text/i }))
 
     fireEvent.click(screen.getByText('Good morning.'))
@@ -51,7 +69,7 @@ describe('FullTextView', () => {
   })
 
   it('every sentence keeps a trailing play icon, separated by a divider, that seeks that sentence', () => {
-    render(<FullTextView track={track} onStartRecite={vi.fn()} onStartFullDictation={vi.fn()} onStartBySentence={vi.fn()} />)
+    render(<FullTextView track={track} audioObjectUrl="blob:fake" audioError={null} onStartRecite={vi.fn()} onStartFullDictation={vi.fn()} onStartBySentence={vi.fn()} />)
     fireEvent.click(screen.getByRole('button', { name: /show text/i }))
 
     const playSentence1 = screen.getByRole('button', { name: 'Play sentence 1' })
@@ -68,16 +86,19 @@ describe('FullTextView', () => {
 
   it('calls onStartRecite when the Recite button is clicked — Recite is a full page now, not a modal rendered here', () => {
     const onStartRecite = vi.fn()
-    render(<FullTextView track={track} onStartRecite={onStartRecite} onStartFullDictation={vi.fn()} onStartBySentence={vi.fn()} />)
+    render(<FullTextView track={track} audioObjectUrl="blob:fake" audioError={null} onStartRecite={onStartRecite} onStartFullDictation={vi.fn()} onStartBySentence={vi.fn()} />)
 
     fireEvent.click(screen.getByRole('button', { name: /^recite$/i }))
 
     expect(onStartRecite).toHaveBeenCalled()
   })
 
-  it('calls onStartFullDictation when the Start Full Dictation button is clicked', () => {
+  // The Full Dictation button itself is commented out in FullTextView (the mode didn't work
+  // well in practice) — skipped rather than deleted, matching that button still being there,
+  // just disabled, in case it's revisited later.
+  it.skip('calls onStartFullDictation when the Start Full Dictation button is clicked', () => {
     const onStartFullDictation = vi.fn()
-    render(<FullTextView track={track} onStartRecite={vi.fn()} onStartFullDictation={onStartFullDictation} onStartBySentence={vi.fn()} />)
+    render(<FullTextView track={track} audioObjectUrl="blob:fake" audioError={null} onStartRecite={vi.fn()} onStartFullDictation={onStartFullDictation} onStartBySentence={vi.fn()} />)
 
     fireEvent.click(screen.getByRole('button', { name: /full dictation/i }))
 
@@ -86,7 +107,7 @@ describe('FullTextView', () => {
 
   it('calls onStartBySentence when the Start By Sentence button is clicked', () => {
     const onStartBySentence = vi.fn()
-    render(<FullTextView track={track} onStartRecite={vi.fn()} onStartFullDictation={vi.fn()} onStartBySentence={onStartBySentence} />)
+    render(<FullTextView track={track} audioObjectUrl="blob:fake" audioError={null} onStartRecite={vi.fn()} onStartFullDictation={vi.fn()} onStartBySentence={onStartBySentence} />)
 
     fireEvent.click(screen.getByRole('button', { name: /sentence dictation/i }))
 
@@ -94,7 +115,7 @@ describe('FullTextView', () => {
   })
 
   it('Show Text toggles back to Hide Text and collapses the transcript again', () => {
-    render(<FullTextView track={track} onStartRecite={vi.fn()} onStartFullDictation={vi.fn()} onStartBySentence={vi.fn()} />)
+    render(<FullTextView track={track} audioObjectUrl="blob:fake" audioError={null} onStartRecite={vi.fn()} onStartFullDictation={vi.fn()} onStartBySentence={vi.fn()} />)
 
     fireEvent.click(screen.getByRole('button', { name: /show text/i }))
     expect(screen.getByText('Hello there.')).toBeInTheDocument()
@@ -104,7 +125,7 @@ describe('FullTextView', () => {
   })
 
   it('toggles the play button to a pause icon while the audio plays, with no separate pause button', async () => {
-    const { container } = render(<FullTextView track={track} onStartRecite={vi.fn()} onStartFullDictation={vi.fn()} onStartBySentence={vi.fn()} />)
+    const { container } = render(<FullTextView track={track} audioObjectUrl="blob:fake" audioError={null} onStartRecite={vi.fn()} onStartFullDictation={vi.fn()} onStartBySentence={vi.fn()} />)
 
     expect(screen.getByRole('button', { name: /^play$/i })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /^pause$/i })).not.toBeInTheDocument()
@@ -118,7 +139,7 @@ describe('FullTextView', () => {
   })
 
   it('Space toggles play/pause, but does nothing while the speed select is focused', () => {
-    render(<FullTextView track={track} onStartRecite={vi.fn()} onStartFullDictation={vi.fn()} onStartBySentence={vi.fn()} />)
+    render(<FullTextView track={track} audioObjectUrl="blob:fake" audioError={null} onStartRecite={vi.fn()} onStartFullDictation={vi.fn()} onStartBySentence={vi.fn()} />)
 
     const select = screen.getByLabelText(/speed/i)
     select.focus()

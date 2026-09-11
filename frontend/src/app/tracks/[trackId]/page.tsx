@@ -70,11 +70,13 @@ function TrackPageContent() {
     load()
   }, [trackId])
 
-  // Downloaded once per track here, at the page level, and handed down to whichever mode is
-  // active — Sentence Dictation and Full Dictation both need the full audio bytes up front (for
-  // fast, repeated in-place replay) and previously each fetched it independently, so switching
-  // between them re-downloaded the same file. Full Listen keeps streaming from track.audioUrl
-  // directly (it only ever needs to play forward, so there's no reason to wait on this).
+  // Downloaded once per track here, at the page level, and handed down to every mode — Sentence
+  // Dictation and Full Dictation need the full audio bytes up front for fast, repeated in-place
+  // replay; Full Listen used to stream track.audioUrl directly instead (it only ever played
+  // forward, so it didn't need to wait), but that meant a Full Listen visit downloaded the same
+  // file a second time in the background anyway once this preload kicked in. Track files are
+  // small enough now (Opus) that the wait is negligible, so all four modes share this one
+  // download instead of paying for it twice.
   useEffect(() => {
     if (!track) return
     setAudioObjectUrl(null)
@@ -184,6 +186,8 @@ function TrackPageContent() {
         <FullTextView
           key={practiceKey}
           track={track}
+          audioObjectUrl={audioObjectUrl}
+          audioError={audioError}
           onStartFullDictation={() => setMode('dictation')}
           onStartBySentence={() => setMode('sentence')}
           onStartRecite={() => setMode('recite')}

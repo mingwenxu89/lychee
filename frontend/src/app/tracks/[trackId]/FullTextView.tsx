@@ -34,11 +34,15 @@ function formatTime(seconds: number): string {
 
 export function FullTextView({
   track,
+  audioObjectUrl,
+  audioError,
   onStartFullDictation,
   onStartBySentence,
   onStartRecite
 }: {
   track: LearnerTrack
+  audioObjectUrl: string | null
+  audioError: string | null
   onStartFullDictation: () => void
   onStartBySentence: () => void
   onStartRecite: () => void
@@ -78,9 +82,14 @@ export function FullTextView({
     if (audioRef.current) audioRef.current.playbackRate = Number(value)
   }
 
+  // Gates playback the same way SentencePracticeView/FullDictationView gate theirs — the audio
+  // element has no src at all until the track's full audio finishes downloading at the page
+  // level (see page.tsx), so calling .play() before then would throw.
+  const isReady = audioObjectUrl !== null
+
   function handlePlayPauseClick() {
     const audio = audioRef.current
-    if (!audio) return
+    if (!audio || !isReady) return
     if (audio.paused) {
       audio.play()
     } else {
@@ -113,7 +122,7 @@ export function FullTextView({
   }
 
   function seekTo(index: number) {
-    if (!audioRef.current) return
+    if (!audioRef.current || !isReady) return
     audioRef.current.currentTime = parseTimeSpanToSeconds(track.sentences[index].startTime)
     audioRef.current.play()
   }
@@ -124,15 +133,19 @@ export function FullTextView({
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18, maxWidth: 820, width: '100%' }}>
       <audio
         ref={audioRef}
-        src={track.audioUrl}
+        src={audioObjectUrl ?? undefined}
         onTimeUpdate={handleTimeUpdate}
         onLoadedMetadata={() => setDuration(audioRef.current?.duration ?? 0)}
       />
+
+      {audioError && <p role="alert" style={{ color: 'var(--error)', fontWeight: 700, margin: 0 }}>{audioError}</p>}
+      {!isReady && !audioError && <p style={{ color: 'var(--ink-soft)', fontWeight: 700, margin: 0 }}>Loading audio...</p>}
 
       <div style={{ ...cardStyle, padding: '18px 22px', display: 'flex', flexDirection: 'column', gap: 14 }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 18 }}>
           <button
             onClick={handlePlayPauseClick}
+            disabled={!isReady}
             aria-label={isPlaying ? 'Pause' : 'Play'}
             style={{
               width: 52,
@@ -145,7 +158,8 @@ export function FullTextView({
               alignItems: 'center',
               justifyContent: 'center',
               flexShrink: 0,
-              cursor: 'pointer'
+              cursor: isReady ? 'pointer' : 'default',
+              opacity: isReady ? 1 : 0.5
             }}
           >
             {isPlaying ? (
@@ -185,9 +199,13 @@ export function FullTextView({
             <option value="1.25">1.25x</option>
             <option value="1.5">1.5x</option>
           </select>
-          <button onClick={onStartFullDictation} style={btnPrimary}>
+          {/* Full Dictation's entry button is disabled — the mode didn't work well in practice.
+              Left commented out (not deleted) rather than removed, along with everything that
+              powers it (FullDictationView, the 'dictation' mode branch in page.tsx, etc.), in
+              case it's revisited later. */}
+          {/* <button onClick={onStartFullDictation} style={btnPrimary}>
             Full Dictation
-          </button>
+          </button> */}
           <button onClick={onStartBySentence} style={btnPrimary}>
             Sentence Dictation
           </button>

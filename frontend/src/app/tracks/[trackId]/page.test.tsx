@@ -35,7 +35,9 @@ describe('TrackPage', () => {
     await waitFor(() => expect(fetch).toHaveBeenCalledWith('/api/learner/tracks/track-1'))
     expect(await screen.findByRole('button', { name: /^recite$/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /sentence dictation/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /full dictation/i })).toBeInTheDocument()
+    // Full Dictation's entry button is commented out in FullTextView (the mode didn't work well
+    // in practice) — it must not render.
+    expect(screen.queryByRole('button', { name: /full dictation/i })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /^by sentence$/i })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /^full listen$/i })).not.toBeInTheDocument()
   })
@@ -66,7 +68,10 @@ describe('TrackPage', () => {
     expect(await screen.findByRole('button', { name: /sentence dictation/i })).toBeInTheDocument()
   })
 
-  it('switches to Full Dictation mode when Start Full Dictation is clicked from Full Listen, and back is not offered as a tab', async () => {
+  // Full Dictation's entry button is commented out in FullTextView (the mode didn't work well
+  // in practice) — skipped rather than deleted, since the mode itself (FullDictationView, this
+  // page's 'dictation' branch) is still there, just unreachable from the UI for now.
+  it.skip('switches to Full Dictation mode when Start Full Dictation is clicked from Full Listen, and back is not offered as a tab', async () => {
     const fetchMock = vi.fn()
     // 1: the track itself.
     fetchMock.mockImplementationOnce(async () => new Response(JSON.stringify(baseTrackResponse), { status: 200 }))
@@ -80,7 +85,7 @@ describe('TrackPage', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     render(<TrackPage />)
-    await screen.findByRole('button', { name: /full dictation/i })
+    await screen.findByRole('button', { name: /sentence dictation/i })
 
     fireEvent.click(screen.getByRole('button', { name: /full dictation/i }))
 
@@ -89,7 +94,9 @@ describe('TrackPage', () => {
     expect(screen.queryByRole('button', { name: /^full listen$/i })).not.toBeInTheDocument()
   })
 
-  it('downloads the track audio only once, reusing it across Sentence Dictation and Full Dictation instead of re-fetching on every switch', async () => {
+  // Same reason as the mode-switch test above — Full Dictation's button is commented out, so
+  // this scenario can no longer be driven through the UI. Skipped, not deleted.
+  it.skip('downloads the track audio only once, reusing it across Sentence Dictation and Full Dictation instead of re-fetching on every switch', async () => {
     const fetchMock = vi.fn()
     // 1: the track itself. 2: the page's one-time audio preload.
     fetchMock.mockImplementationOnce(async () => new Response(JSON.stringify(baseTrackResponse), { status: 200 }))
@@ -121,7 +128,7 @@ describe('TrackPage', () => {
 
   it('renders a breadcrumb with the Exercise and Track names, linking to Exercises and the Exercise', async () => {
     render(<TrackPage />)
-    await screen.findByRole('button', { name: /full dictation/i })
+    await screen.findByRole('button', { name: /sentence dictation/i })
 
     expect(screen.getByText('Exercises').closest('a')).toHaveAttribute('href', '/')
     expect(screen.getByText('Verify Exercise').closest('a')).toHaveAttribute('href', '/exercises/exercise-1')
@@ -130,7 +137,7 @@ describe('TrackPage', () => {
 
   it('shows the level and words-per-minute', async () => {
     render(<TrackPage />)
-    await screen.findByRole('button', { name: /full dictation/i })
+    await screen.findByRole('button', { name: /sentence dictation/i })
 
     expect(screen.getByText('Vocab Level: A1')).toBeInTheDocument()
     expect(screen.getByText('Speed: 120 wpm')).toBeInTheDocument()
@@ -142,14 +149,14 @@ describe('TrackPage', () => {
     ))
 
     render(<TrackPage />)
-    await screen.findByRole('button', { name: /full dictation/i })
+    await screen.findByRole('button', { name: /sentence dictation/i })
 
     expect(screen.getByText('A short passage about winter.')).toBeInTheDocument()
   })
 
   it('toggles the track favorite button and calls the favorite endpoint', async () => {
     render(<TrackPage />)
-    await screen.findByRole('button', { name: /full dictation/i })
+    await screen.findByRole('button', { name: /sentence dictation/i })
 
     const favoriteButton = screen.getByRole('button', { name: 'Add to favorites' })
     fireEvent.click(favoriteButton)
