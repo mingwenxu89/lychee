@@ -87,10 +87,11 @@ export function DiffText({
   // lighting up red. Later mismatches render as plain text, same as a Correct word.
   firstMismatchOnly?: boolean
 }) {
-  // An empty word happens when textComparer split a contraction (e.g. "I'm" -> "i" + "am")
-  // for comparison purposes but only attached the real surface text to the first part, so the
-  // second part has nothing to show — skip it entirely rather than rendering a blank span with
-  // its own space, which would show up as an awkward double space.
+  // An empty word happens when textComparer split a word (a contraction like "I'm" -> "i" + "am",
+  // or a hyphenated compound like "four-day" -> "four" + "day") for comparison purposes but only
+  // attached the real surface text — plus whatever separator originally followed it — to the
+  // first part, so the second part has nothing to show. Skip it entirely rather than rendering a
+  // blank span.
   const nonEmptyWords = words.filter((w) => w.word !== '')
   const visibleWords = variant === 'dictation' ? flagInteriorExtras(nonEmptyWords) : nonEmptyWords
   const styleFor = variant === 'dictation' ? dictationWordStyle : wordStyle
@@ -110,15 +111,27 @@ export function DiffText({
 
   return (
     <span>
-      {visibleWords.map((w, i) => (
-        // The gap between words is a real space character, not CSS margin, so
-        // selecting and copying this text reproduces actual spaces rather than
-        // running every word together.
-        <span key={i}>
-          <span data-status={w.status} style={resolvedStyle(w, i)}>{w.word}</span>
-          {i < visibleWords.length - 1 ? ' ' : ''}
-        </span>
-      ))}
+      {visibleWords.map((w, i) => {
+        // w.word already carries the *exact* original text that followed this word (see
+        // textComparer's tokenizeAndExpand) — a plain space in the common case, but whatever the
+        // reference actually had there (a hyphen, an em dash, a doubled space, ...). No separator
+        // is synthesized here; concatenating every word's own text back-to-back reproduces the
+        // original string exactly, character for character, rather than rebuilding it from a
+        // fixed idea of what a "word boundary" looks like — which is exactly the kind of gap that
+        // let earlier bugs (a dropped hyphen, a dropped apostrophe) drop symbols from what was
+        // shown. Only trailing *whitespace* is pulled out of the colored/highlighted span — for
+        // a Missing word's background+padding, that keeps the highlight from visually swallowing
+        // the space before the next word — everything else (the word's own attached punctuation,
+        // any non-whitespace separator) stays inside the styled span, exactly as written.
+        const trimmed = w.word.replace(/\s+$/, '')
+        const trailingWhitespace = w.word.slice(trimmed.length)
+        return (
+          <span key={i}>
+            <span data-status={w.status} style={resolvedStyle(w, i)}>{trimmed}</span>
+            {trailingWhitespace}
+          </span>
+        )
+      })}
     </span>
   )
 }

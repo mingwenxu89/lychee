@@ -27,7 +27,9 @@ describe('textComparer', () => {
     expect(result.words[1].status).toBe('Correct')
     expect(result.words[2].status).toBe('Correct')
     expect(result.words[3].status).toBe('Incorrect')
-    expect(result.words[3].word).toBe('first')
+    // Every word's display carries the exact original text that followed it, up to (but not
+    // including) the next word — a trailing space here, since "first" isn't the last word.
+    expect(result.words[3].word).toBe('first ')
     expect(result.words[4].status).toBe('Correct')
   })
 
@@ -35,7 +37,7 @@ describe('textComparer', () => {
     const result = compare('I saw the first snowfall', 'I saw first snowfall')
 
     expect(result.isExactMatch).toBe(false)
-    expect(result.words.some((w) => w.status === 'Missing' && w.word === 'the')).toBe(true)
+    expect(result.words.some((w) => w.status === 'Missing' && w.word === 'the ')).toBe(true)
     expect(result.accuracyScore).toBeCloseTo(0.8, 5)
   })
 
@@ -43,7 +45,7 @@ describe('textComparer', () => {
     const result = compare('I saw the snowfall', 'I saw the first snowfall')
 
     expect(result.isExactMatch).toBe(false)
-    expect(result.words.some((w) => w.status === 'Extra' && w.word === 'first')).toBe(true)
+    expect(result.words.some((w) => w.status === 'Extra' && w.word === 'first ')).toBe(true)
     expect(result.accuracyScore).toBeCloseTo(1.0, 5)
   })
 
@@ -107,16 +109,16 @@ describe('textComparer', () => {
     // relies on the second one being empty to skip rendering it (see DiffText.test.tsx).
     const matched = compare("I'll go home", 'I will go home')
     expect(matched.words).toEqual([
-      { word: "I'll", status: 'Correct' },
+      { word: "I'll ", status: 'Correct' },
       { word: '', status: 'Correct' },
-      { word: 'go', status: 'Correct' },
+      { word: 'go ', status: 'Correct' },
       { word: 'home', status: 'Correct' }
     ])
 
     // Same thing when the contraction word itself doesn't match — it must still show as
     // written ("I'm"), never as "i am".
     const mismatched = compare("I'm ready", 'You are ready')
-    expect(mismatched.words[0]).toEqual({ word: "I'm", status: 'Incorrect' })
+    expect(mismatched.words[0]).toEqual({ word: "I'm ", status: 'Incorrect' })
     expect(mismatched.words[1]).toEqual({ word: '', status: 'Incorrect' })
   })
 
@@ -140,8 +142,9 @@ describe('textComparer', () => {
   it('preserves punctuation attached to displayed reference words', () => {
     const result = compare('I saw the first snowfall, right?', 'I saw the last snowfall')
 
-    expect(result.words[3]).toEqual({ word: 'first', status: 'Incorrect' })
-    expect(result.words[4]).toEqual({ word: 'snowfall,', status: 'Correct' })
+    expect(result.words[3]).toEqual({ word: 'first ', status: 'Incorrect' })
+    expect(result.words[4]).toEqual({ word: 'snowfall, ', status: 'Correct' })
+    // "right?" is the last word in the reference, so it has no trailing separator to carry.
     expect(result.words[5]).toEqual({ word: 'right?', status: 'Missing' })
   })
 
@@ -155,6 +158,40 @@ describe('textComparer', () => {
 
     expect(result.isExactMatch).toBe(true)
     expect(result.accuracyScore).toBe(1.0)
+  })
+
+  it('keeps the reference hyphen in the displayed diff instead of dropping it', () => {
+    // The hyphen still has to act as a separator for comparison (so "four day" matches), but the
+    // word shown back to the learner must be the original "four-day", not "four" + "day" with
+    // the hyphen silently gone.
+    const matched = compare('a four-day trip', 'a four day trip')
+    expect(matched.words).toEqual([
+      { word: 'a ', status: 'Correct' },
+      { word: 'four-day ', status: 'Correct' },
+      { word: '', status: 'Correct' },
+      { word: 'trip', status: 'Correct' }
+    ])
+
+    // Same thing when the hyphenated word itself is wrong — still shown hyphenated, not split.
+    // ("day" still independently matches the submission's own "day", so only the first half
+    // is Incorrect — the point being tested is that the hyphen survives on that first half.)
+    const mismatched = compare('a four-day trip', 'a five day trip')
+    expect(mismatched.words[1]).toEqual({ word: 'four-day ', status: 'Incorrect' })
+    expect(mismatched.words[2]).toEqual({ word: '', status: 'Correct' })
+  })
+
+  it('reconstructs a hyphenated number word\'s display with exactly one trailing separator, not two', () => {
+    // "twenty-one" as the reference merges into one number token for comparison (so it matches
+    // "21"), and the merged token's display must come back as "twenty-one " (one trailing space,
+    // carried on the hyphen's second half before the merge), never "twenty-one  " with a second,
+    // stray space also inserted by the merge itself.
+    const result = compare('We waited twenty-one minutes', 'We waited 21 minutes')
+    expect(result.words).toEqual([
+      { word: 'We ', status: 'Correct' },
+      { word: 'waited ', status: 'Correct' },
+      { word: 'twenty-one ', status: 'Correct' },
+      { word: 'minutes', status: 'Correct' }
+    ])
   })
 
   it.each([
@@ -175,12 +212,33 @@ describe('textComparer', () => {
     const result = compare('I have ten dollars', 'I have 11 dollars')
 
     expect(result.isExactMatch).toBe(false)
-    expect(result.words.some((w) => w.status === 'Incorrect' && w.word === 'ten')).toBe(true)
+    expect(result.words.some((w) => w.status === 'Incorrect' && w.word === 'ten ')).toBe(true)
   })
 
   it('merging a number-word run does not change the reference word\'s displayed text', () => {
     const result = compare('We waited twenty one minutes', 'We waited 21 minutes')
 
-    expect(result.words.some((w) => w.word === 'twenty one')).toBe(true)
+    expect(result.words.some((w) => w.word === 'twenty one ')).toBe(true)
+  })
+
+  it('flags a contraction as wrong when only its first half was typed', () => {
+    // "we're" splits into "we" + "are" for comparison. The submission typed "we" (which matches)
+    // but never typed "are" at all — since only the first half ever carries visible text, that
+    // mismatch must surface on the visible "we're", not vanish because its own half matched.
+    const result = compare("We're friends.", 'We friends.')
+
+    expect(result.isExactMatch).toBe(false)
+    expect(result.words).toEqual([
+      { word: "We're ", status: 'Missing' },
+      { word: '', status: 'Missing' },
+      { word: 'friends.', status: 'Correct' }
+    ])
+  })
+
+  it('still flags nothing when the contraction is typed out in full', () => {
+    const result = compare("We're friends.", 'We are friends.')
+
+    expect(result.isExactMatch).toBe(true)
+    expect(result.words.every((w) => w.status === 'Correct')).toBe(true)
   })
 })

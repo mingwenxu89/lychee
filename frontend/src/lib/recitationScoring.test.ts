@@ -26,9 +26,13 @@ describe('scoreRecitation', () => {
   it('groups each sentence\'s own words, including a word wrongly inserted inside it', () => {
     const result = scoreRecitation(sentences, 'I saw the huge snowfall It was magical')
 
+    // Every word carries the exact original text that followed it (see textComparer), including
+    // a trailing space on "snowfall" — it's the last word of sentence 1's own text, but not the
+    // last word of the combined multi-sentence reference compare() actually ran against (sentence
+    // 2 follows right after).
     const s1 = result.sentenceResults.find((s) => s.sentenceId === 's1')!
-    expect(s1.words.map((w) => w.word)).toEqual(['I', 'saw', 'the', 'huge', 'snowfall'])
-    expect(s1.words.find((w) => w.word === 'huge')?.status).toBe('Extra')
+    expect(s1.words.map((w) => w.word)).toEqual(['I ', 'saw ', 'the ', 'huge ', 'snowfall '])
+    expect(s1.words.find((w) => w.word === 'huge ')?.status).toBe('Extra')
     expect(s1.isQualified).toBe(true)
   })
 })

@@ -120,10 +120,13 @@ describe('DiffText', () => {
   })
 
   it('skips an empty-display word with no extra space (e.g. the unattached second half of an expanded contraction like "I\'m")', () => {
+    // textComparer bakes the original trailing separator onto the *first* part of a split word
+    // (see tokenizeAndExpand) — DiffText no longer inserts a space of its own, so this fixture
+    // includes the trailing space on "I'm" itself, exactly as compare() would produce it.
     const { container } = render(
       <DiffText
         words={[
-          { word: "I'm", status: 'Correct' },
+          { word: "I'm ", status: 'Correct' },
           { word: '', status: 'Correct' },
           { word: 'ready', status: 'Correct' }
         ]}
@@ -134,11 +137,13 @@ describe('DiffText', () => {
   })
 
   it('separates words with a real space character so the text is copyable, not just visually spaced by CSS', () => {
+    // Each word's own trailing space is baked into its text (matching what compare() actually
+    // produces) — DiffText concatenates them with no separator of its own.
     const { container } = render(
       <DiffText
         words={[
-          { word: 'I', status: 'Correct' },
-          { word: 'saw', status: 'Correct' },
+          { word: 'I ', status: 'Correct' },
+          { word: 'saw ', status: 'Correct' },
           { word: 'snow', status: 'Correct' }
         ]}
       />

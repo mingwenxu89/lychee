@@ -25,7 +25,9 @@ describe('RecitationPanel', () => {
         submittedText: 'Hello there',
         score: 1,
         words: [
-          { word: 'Hello', status: 'Correct' },
+          // "Hello" carries the trailing space that separated it from "there" in the reference;
+          // "there" is the reference's last word, so it has no trailing separator to carry.
+          { word: 'Hello ', status: 'Correct' },
           { word: 'there', status: 'Correct' }
         ],
         qualifiedSentenceIds: ['s1']

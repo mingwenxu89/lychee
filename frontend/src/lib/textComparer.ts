@@ -80,13 +80,17 @@ const NUMBER_WORDS: Record<string, { value: number; kind: NumberWordKind }> = {
   hundred: { value: 100, kind: 'scale' }, thousand: { value: 1000, kind: 'scale' }, million: { value: 1_000_000, kind: 'scale' }
 }
 
-type Token = { core: string; display: string }
+// groupId ties together the comparison units produced from one original surface word (see
+// tokenizeAndExpand's contraction/hyphen splitting) so compare() can tell, after scoring, whether
+// every part of that original word matched — see upgradeSplitTokenGroups.
+type Token = { core: string; display: string; groupId: number }
 
-// Scans a token stream for maximal runs of number words (e.g. "twenty", "one" or "twenty-one",
-// tokenized identically since tokenize() already drops the hyphen as a separator) and merges each
-// run into a single token whose core is the resulting digit string — so it lines up with a plain
-// numeral written on the other side. Non-number tokens, and the display text, pass through
-// unchanged; only the comparison-only `core` field is affected.
+// Scans a token stream for maximal runs of number words (e.g. "twenty", "one" or "twenty-one" —
+// tokenizeAndExpand() splits the hyphenated form into the same two core tokens, just with the
+// hyphen preserved on the first one's display) and merges each run into a single token whose
+// core is the resulting digit string — so it lines up with a plain numeral written on the other
+// side. Non-number tokens, and the display text, pass through unchanged; only the
+// comparison-only `core` field is affected.
 function mergeNumberWordRuns(tokens: Token[]): Token[] {
   const result: Token[] = []
   let i = 0
@@ -119,8 +123,12 @@ function mergeNumberWordRuns(tokens: Token[]): Token[] {
       break
     }
     if (matchedAny) {
-      const display = tokens.slice(start, i).map((t) => t.display).join(' ')
-      result.push({ core: String(total + current), display })
+      // Every token's own display already carries the exact original separator that followed it
+      // (see tokenizeAndExpand) — including the empty-string displays of a hyphenated number's
+      // trailing parts — so concatenating with no separator of our own reproduces the original
+      // text exactly, same as DiffText does with the final word list.
+      const display = tokens.slice(start, i).map((t) => t.display).join('')
+      result.push({ core: String(total + current), display, groupId: tokens[start].groupId })
     } else {
       result.push(tokens[start])
       i = start + 1
@@ -134,29 +142,43 @@ function mergeNumberWordRuns(tokens: Token[]): Token[] {
 // displaying the reference's real punctuation.
 function tokenize(text: string): Token[] {
   const matches = text.match(/[A-Za-z0-9']+[.,!?;:]*/g) ?? []
-  return matches.map((display) => ({ core: display.match(/^[A-Za-z0-9']+/)?.[0] ?? display, display }))
+  return matches.map((display, i) => ({ core: display.match(/^[A-Za-z0-9']+/)?.[0] ?? display, display, groupId: i }))
 }
 
-// Same as tokenize(), but a word that's a known contraction is additionally split into its
-// expanded parts for comparison (so "I'm" lines up with someone typing "I am", or vice versa)
-// — this must happen per-token, not by expanding the whole string first, because expanding
-// first would also become each part's `display`, and the diff would show "i am" (lowercase,
-// split in two) instead of the original "I'm". Only the first expanded part keeps the real
-// surface text as its display; later parts get an empty display so they render as nothing
-// (see DiffText, which skips empty-display words) — each part still gets its own Correct/
-// Incorrect/Missing status, so scoring is unaffected, only what's shown changes.
+// Same as tokenize(), but every token's display also carries the *exact* original text that
+// followed it up to the next token (see `trailingSeparator` below) — not a synthesized single
+// space. Whatever character actually sat between two words in the reference — a plain space, a
+// double space, an em dash, a stray quote, anything — is preserved byte-for-byte, because the
+// display is never rebuilt from a restricted set of "known" characters. DiffText concatenates
+// tokens' displays directly with no separator of its own; see its own comment for why.
+//
+// On top of that, two kinds of tokens are additionally split into more than one comparison unit
+// — this must happen per-token, not by rewriting the whole string first, because that would also
+// corrupt what gets displayed (see below for each case). Only the first resulting part keeps the
+// real surface text (plus the trailing separator) as its display; later parts get an empty
+// display so they render as nothing (see DiffText, which skips empty-display words) — each part
+// still gets its own Correct/Incorrect/Missing status, so scoring is unaffected.
+//
+// 1. A hyphenated compound ("four-day") is split into its component words ("four", "day") so it
+//    lines up with someone typing it as two separate words.
+// 2. A known contraction ("I'm") is additionally split into its expanded parts ("i", "am") so it
+//    lines up with someone spelling it out.
 function tokenizeAndExpand(text: string): Token[] {
-  const matches = text.match(/[A-Za-z0-9'’]+[.,!?;:]*/g) ?? []
+  const matches = [...text.matchAll(/[A-Za-z0-9'’]+(?:-[A-Za-z0-9'’]+)*[.,!?;:]*/g)]
   const result: Token[] = []
-  for (const raw of matches) {
-    const core = raw.match(/^[A-Za-z0-9'’]+/)?.[0] ?? raw
+  matches.forEach((match, i) => {
+    const raw = match[0]
+    const matchEnd = match.index + raw.length
+    const nextStart = i + 1 < matches.length ? matches[i + 1].index : text.length
+    const trailingSeparator = text.slice(matchEnd, nextStart)
+
+    const core = raw.match(/^[A-Za-z0-9'’]+(?:-[A-Za-z0-9'’]+)*/)?.[0] ?? raw
     const expansion = CONTRACTION_EXPANSIONS_BY_STRIPPED_KEY[core.replace(/['’]/g, '').toLowerCase()]
-    if (!expansion) {
-      result.push({ core, display: raw })
-      continue
-    }
-    expansion.split(' ').forEach((part, i) => result.push({ core: part, display: i === 0 ? raw : '' }))
-  }
+    const parts = expansion ? expansion.split(' ') : core.split('-')
+    parts.forEach((part, partIndex) => {
+      result.push({ core: part, display: partIndex === 0 ? raw + trailingSeparator : '', groupId: i })
+    })
+  })
   return result
 }
 
@@ -190,7 +212,11 @@ export function compare(referenceText: string, submittedText: string): Compariso
     }
   }
 
+  // groupIds runs parallel to words: the groupId of the ref token an entry came from (Correct/
+  // Incorrect/Missing always pull from refWords), or null for an Extra entry (pulled from
+  // subWords, which never needs the upgrade pass below).
   const words: WordDiff[] = []
+  const groupIds: (number | null)[] = []
   let correctCount = 0
   let refIndex = 0
   let subIndex = 0
@@ -198,6 +224,7 @@ export function compare(referenceText: string, submittedText: string): Compariso
   while (refIndex < n && subIndex < m) {
     if (refNorm[refIndex] === subNorm[subIndex]) {
       words.push({ word: refWords[refIndex].display, status: 'Correct' })
+      groupIds.push(refWords[refIndex].groupId)
       correctCount++
       refIndex++
       subIndex++
@@ -210,31 +237,65 @@ export function compare(referenceText: string, submittedText: string): Compariso
 
     if (substitutionScore >= deleteScore && substitutionScore >= insertScore) {
       words.push({ word: refWords[refIndex].display, status: 'Incorrect' })
+      groupIds.push(refWords[refIndex].groupId)
       refIndex++
       subIndex++
     } else if (deleteScore >= insertScore) {
       words.push({ word: refWords[refIndex].display, status: 'Missing' })
+      groupIds.push(refWords[refIndex].groupId)
       refIndex++
     } else {
       words.push({ word: subWords[subIndex].display, status: 'Extra' })
+      groupIds.push(null)
       subIndex++
     }
   }
 
   while (refIndex < n) {
     words.push({ word: refWords[refIndex].display, status: 'Missing' })
+    groupIds.push(refWords[refIndex].groupId)
     refIndex++
   }
 
   while (subIndex < m) {
     words.push({ word: subWords[subIndex].display, status: 'Extra' })
+    groupIds.push(null)
     subIndex++
   }
+
+  upgradeSplitTokenGroups(words, groupIds)
 
   const accuracyScore = n === 0 ? (m === 0 ? 1.0 : 0.0) : correctCount / n
   const isExactMatch = computeIsExactMatch(words)
 
   return { words, accuracyScore, isExactMatch }
+}
+
+// A reference word split into multiple comparison units (a contraction like "we're" -> "we" +
+// "are", or a hyphenated compound) only shows its FIRST part's text — the rest render as nothing
+// (see tokenizeAndExpand). If that first part happens to match but a later, invisible sibling
+// doesn't, the mismatch would otherwise vanish entirely: the learner sees a plain, unflagged
+// "we're" even though they never typed "are". This upgrades the visible part's status to the
+// worst status found among its siblings — but only when the visible part was itself Correct: a
+// part that's already Incorrect/Missing already shows the problem, and is left alone rather than
+// downgraded further. A sibling's own independent Correct status is also left alone (e.g. "day"
+// in "four-day" separately matching the submission's own "day") — hyphenated halves are still
+// scored as independent words, not folded into one all-or-nothing unit.
+function upgradeSplitTokenGroups(words: WordDiff[], groupIds: (number | null)[]): void {
+  const rank: Record<WordDiffStatus, number> = { Correct: 0, Extra: 0, Incorrect: 1, Missing: 2 }
+  const worstByGroup = new Map<number, WordDiffStatus>()
+  words.forEach((w, i) => {
+    const groupId = groupIds[i]
+    if (groupId === null) return
+    const current = worstByGroup.get(groupId)
+    if (current === undefined || rank[w.status] > rank[current]) worstByGroup.set(groupId, w.status)
+  })
+  words.forEach((w, i) => {
+    const groupId = groupIds[i]
+    if (groupId === null || w.word === '' || w.status !== 'Correct') return
+    const worst = worstByGroup.get(groupId)
+    if (worst && worst !== 'Correct') w.status = worst
+  })
 }
 
 // The reference sentence counts as fully matched if it appears anywhere in the
