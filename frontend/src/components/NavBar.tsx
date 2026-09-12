@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { ChangePasswordModal } from './ChangePasswordModal'
+import { TranslationLanguageModal } from './TranslationLanguageModal'
 import lycheeIcon from '@/app/icon.png'
 
 type NavBarProps = {
@@ -24,6 +25,7 @@ export function NavBar({ rankLabel, activityDays, userInitial }: NavBarProps) {
   const activityLightness = 30 + (activityDays / 7) * 55 // 30% (darkest) to 85% (brightest)
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false)
+  const [isTranslationLanguageOpen, setIsTranslationLanguageOpen] = useState(false)
 
   async function handleLogout() {
     setIsMenuOpen(false)
@@ -126,6 +128,16 @@ export function NavBar({ rankLabel, activityDays, userInitial }: NavBarProps) {
                 </button>
                 <button
                   type="button"
+                  onClick={() => {
+                    setIsMenuOpen(false)
+                    setIsTranslationLanguageOpen(true)
+                  }}
+                  style={{ textAlign: 'left', padding: '10px 16px', border: 'none', background: 'none', cursor: 'pointer', fontSize: 14 }}
+                >
+                  Translation Language
+                </button>
+                <button
+                  type="button"
                   onClick={handleLogout}
                   style={{ textAlign: 'left', padding: '10px 16px', border: 'none', background: 'none', cursor: 'pointer', fontSize: 14 }}
                 >
@@ -138,6 +150,7 @@ export function NavBar({ rankLabel, activityDays, userInitial }: NavBarProps) {
       </div>
 
       {isChangePasswordOpen && <ChangePasswordModal onClose={() => setIsChangePasswordOpen(false)} />}
+      {isTranslationLanguageOpen && <TranslationLanguageModal onClose={() => setIsTranslationLanguageOpen(false)} />}
     </div>
   )
 }

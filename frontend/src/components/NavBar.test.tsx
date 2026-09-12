@@ -73,6 +73,16 @@ describe('NavBar', () => {
     expect(screen.getByPlaceholderText('Current password')).toBeInTheDocument()
   })
 
+  it('opens the Translation Language modal from the dropdown', () => {
+    vi.mocked(usePathname).mockReturnValue('/')
+    render(<NavBar rankLabel="Seedling" activityDays={0} userInitial="M" />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Account menu' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Translation Language' }))
+
+    expect(screen.getByRole('heading', { name: 'Translation Language' })).toBeInTheDocument()
+  })
+
   it('logs out and redirects to /login when Log out is clicked', async () => {
     vi.mocked(usePathname).mockReturnValue('/')
     render(<NavBar rankLabel="Seedling" activityDays={0} userInitial="M" />)
