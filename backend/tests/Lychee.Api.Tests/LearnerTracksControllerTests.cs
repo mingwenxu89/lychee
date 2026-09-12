@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using System.Text;
 using Lychee.Api.Auth;
 using Lychee.Api.Controllers;
+using Lychee.Data;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -31,6 +32,38 @@ public class LearnerTracksControllerTests : IClassFixture<LycheeWebApplicationFa
         client.DefaultRequestHeaders.Authorization =
             new AuthenticationHeaderValue("Bearer", TestTokens.ForRole(jwtTokenService, "User"));
         return client;
+    }
+
+    private async Task<HttpClient> LearnerClientAsync()
+    {
+        var client = _factory.CreateClient();
+        var jwtTokenService = _factory.Services.GetRequiredService<IJwtTokenService>();
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<LycheeDbContext>();
+        var token = await TestTokens.ForRoleAsync(jwtTokenService, db, "User");
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        return client;
+    }
+
+    private static async Task<(Guid TrackId, Guid[] SentenceIds)> CreateTrackWithSentencesAsync(HttpClient adminClient)
+    {
+        var exerciseId = await CreateExerciseAsync(adminClient);
+        var unitId = await CreateUnitAsync(adminClient, exerciseId, 1);
+
+        using var form = new MultipartFormDataContent();
+        var audioContent = new ByteArrayContent(Encoding.UTF8.GetBytes("fake-audio"));
+        audioContent.Headers.ContentType = new MediaTypeHeaderValue("audio/mpeg");
+        form.Add(audioContent, "AudioFile", "track.mp3");
+        form.Add(new StringContent("1\n00:00:00,000 --> 00:00:02,000\nHello there.\n\n2\n00:00:02,000 --> 00:00:04,000\nGood morning.\n"), "SrtFile", "track.srt");
+        form.Add(new StringContent("A1"), "Level");
+        form.Add(new StringContent("Test Track"), "Title");
+        var trackResponse = await adminClient.PostAsync($"/api/admin/units/{unitId}/tracks", form);
+        var track = await trackResponse.Content.ReadFromJsonAsync<IdOnly>();
+
+        var sentencesResponse = await adminClient.GetAsync($"/api/admin/tracks/{track!.Id}/sentences");
+        var sentences = await sentencesResponse.Content.ReadFromJsonAsync<List<IdOnly>>();
+
+        return (track.Id, sentences!.Select(s => s.Id).ToArray());
     }
 
     private static async Task<Guid> CreateTrackAsync(HttpClient adminClient, Guid unitId, string sentenceText = "Hello there.")
@@ -147,6 +180,41 @@ public class LearnerTracksControllerTests : IClassFixture<LycheeWebApplicationFa
         var response = await client.GetAsync($"/api/learner/tracks/{Guid.NewGuid()}");
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Get_IncludesTranslation_WhenLearnerHasPreferredLanguageAndOneExists()
+    {
+        var admin = AdminClient();
+        var (trackId, sentenceIds) = await CreateTrackWithSentencesAsync(admin);
+        await admin.PutAsJsonAsync($"/api/admin/sentences/{sentenceIds[0]}/translations/zh",
+            new { translatedText = "你好。" });
+
+        var learner = await LearnerClientAsync();
+        await learner.PutAsJsonAsync("/api/learner/preferences/translation-language", new { languageCode = "zh" });
+
+        var track = await (await learner.GetAsync($"/api/learner/tracks/{trackId}"))
+            .Content.ReadFromJsonAsync<LearnerTrackResponse>();
+
+        var translated = track!.Sentences.Single(s => s.Id == sentenceIds[0]);
+        Assert.Equal("你好。", translated.Translation);
+        var untranslated = track.Sentences.Single(s => s.Id != sentenceIds[0]);
+        Assert.Null(untranslated.Translation);
+    }
+
+    [Fact]
+    public async Task Get_TranslationIsNull_WhenLearnerHasNoPreferredLanguage()
+    {
+        var admin = AdminClient();
+        var (trackId, sentenceIds) = await CreateTrackWithSentencesAsync(admin);
+        await admin.PutAsJsonAsync($"/api/admin/sentences/{sentenceIds[0]}/translations/zh",
+            new { translatedText = "你好。" });
+
+        var learner = await LearnerClientAsync();
+        var track = await (await learner.GetAsync($"/api/learner/tracks/{trackId}"))
+            .Content.ReadFromJsonAsync<LearnerTrackResponse>();
+
+        Assert.All(track!.Sentences, s => Assert.Null(s.Translation));
     }
 
     private record IdOnly(Guid Id);
