@@ -3,15 +3,17 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { AdminBreadcrumb } from '../../../../../../AdminBreadcrumb'
+import { SUPPORTED_TRANSLATION_LANGUAGES } from '@/lib/supportedTranslationLanguages'
 
 type Exercise = { id: string; title: string }
 type Unit = { id: string; title: string }
 type Track = { id: string; title: string }
 type Sentence = { id: string; trackId: string; index: number; text: string; startTime: string; endTime: string }
+type Translation = { sentenceId: string; languageCode: string; translatedText: string; isManuallyEdited: boolean }
 
 const headerRowStyle: React.CSSProperties = {
   display: 'grid',
-  gridTemplateColumns: '48px 1fr 160px 160px 96px',
+  gridTemplateColumns: '48px 1fr 160px 160px 1fr 96px',
   alignItems: 'center',
   padding: '14px 24px',
   background: 'oklch(96% 0.01 80)',
@@ -29,7 +31,7 @@ const headerCellStyle: React.CSSProperties = {
 function rowStyle(isLast: boolean, isDirty: boolean): React.CSSProperties {
   return {
     display: 'grid',
-    gridTemplateColumns: '48px 1fr 160px 160px 96px',
+    gridTemplateColumns: '48px 1fr 160px 160px 1fr 96px',
     alignItems: 'center',
     padding: '10px 24px',
     borderBottom: isLast ? 'none' : '1px solid var(--line)',
@@ -91,6 +93,11 @@ export default function TrackProofreadingPage() {
   const [originalById, setOriginalById] = useState<Record<string, Sentence>>({})
   const [savingId, setSavingId] = useState<string | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [translationLanguage, setTranslationLanguage] = useState(SUPPORTED_TRANSLATION_LANGUAGES[0].code)
+  const [translations, setTranslations] = useState<Record<string, Translation>>({})
+  const [overwriteManualEdits, setOverwriteManualEdits] = useState(false)
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [generateError, setGenerateError] = useState<string | null>(null)
 
   async function loadExercise() {
     const response = await fetch(`/api/admin/exercises/${exerciseId}`)
@@ -116,12 +123,64 @@ export default function TrackProofreadingPage() {
     }
   }
 
+  async function loadTranslations() {
+    const response = await fetch(`/api/admin/tracks/${trackId}/translations?languageCode=${translationLanguage}`)
+    if (response.ok) {
+      const loaded: Translation[] = await response.json()
+      setTranslations(Object.fromEntries(loaded.map((t) => [t.sentenceId, t])))
+    }
+  }
+
   useEffect(() => {
     loadExercise()
     loadUnit()
     loadTrack()
     loadSentences()
   }, [exerciseId, unitId, trackId])
+
+  useEffect(() => {
+    loadTranslations()
+  }, [trackId, translationLanguage])
+
+  async function handleGenerate() {
+    setIsGenerating(true)
+    setGenerateError(null)
+    try {
+      const response = await fetch(`/api/admin/tracks/${trackId}/translations`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ languageCode: translationLanguage, overwriteManualEdits })
+      })
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({ message: 'Failed to generate translations' }))
+        setGenerateError(body.message ?? 'Failed to generate translations')
+        return
+      }
+      const loaded: Translation[] = await response.json()
+      setTranslations(Object.fromEntries(loaded.map((t) => [t.sentenceId, t])))
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+
+  async function saveTranslation(sentenceId: string, translatedText: string) {
+    const response = await fetch(`/api/admin/sentences/${sentenceId}/translations/${translationLanguage}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ translatedText })
+    })
+    if (response.ok) {
+      const saved: Translation = await response.json()
+      setTranslations((current) => ({ ...current, [sentenceId]: saved }))
+    }
+  }
+
+  function updateLocalTranslation(sentenceId: string, translatedText: string) {
+    setTranslations((current) => ({
+      ...current,
+      [sentenceId]: { sentenceId, languageCode: translationLanguage, translatedText, isManuallyEdited: current[sentenceId]?.isManuallyEdited ?? false }
+    }))
+  }
 
   function updateLocalField(id: string, field: 'text' | 'startTime' | 'endTime', value: string) {
     setSentences((current) => current.map((s) => (s.id === id ? { ...s, [field]: value } : s)))
@@ -178,12 +237,47 @@ export default function TrackProofreadingPage() {
           </p>
         )}
 
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <select
+            aria-label="Translation language"
+            value={translationLanguage}
+            onChange={(e) => setTranslationLanguage(e.target.value)}
+            style={{ border: '2px solid var(--line)', borderRadius: 10, padding: '8px 12px', fontSize: 13.5, fontWeight: 700 }}
+          >
+            {SUPPORTED_TRANSLATION_LANGUAGES.map((lang) => (
+              <option key={lang.code} value={lang.code}>{lang.displayName}</option>
+            ))}
+          </select>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: 'var(--ink-soft)' }}>
+            <input
+              type="checkbox"
+              checked={overwriteManualEdits}
+              onChange={(e) => setOverwriteManualEdits(e.target.checked)}
+            />
+            Overwrite manually edited sentences
+          </label>
+          <button
+            onClick={handleGenerate}
+            disabled={isGenerating}
+            style={{ background: 'var(--primary)', color: 'white', border: 'none', borderRadius: 999, padding: '9px 20px', fontWeight: 800, fontSize: 13, cursor: 'pointer' }}
+          >
+            {isGenerating ? 'Generating...' : 'Generate Translations'}
+          </button>
+        </div>
+
+        {generateError && (
+          <p role="alert" style={{ color: 'var(--error)', fontWeight: 700, margin: 0 }}>
+            {generateError}
+          </p>
+        )}
+
         <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 22, overflow: 'hidden' }}>
           <div style={headerRowStyle}>
             <span style={headerCellStyle}>#</span>
             <span style={headerCellStyle}>Text</span>
             <span style={headerCellStyle}>Start</span>
             <span style={headerCellStyle}>End</span>
+            <span style={headerCellStyle}>Translation</span>
             <span />
           </div>
           {sentences.map((sentence, index) => {
@@ -208,6 +302,13 @@ export default function TrackProofreadingPage() {
                   value={toDisplayTime(sentence.endTime)}
                   onChange={(e) => updateLocalField(sentence.id, 'endTime', toStoredTime(e.target.value))}
                   style={timeInputStyle(dirty)}
+                />
+                <input
+                  aria-label={`Sentence ${sentence.index} translation`}
+                  value={translations[sentence.id]?.translatedText ?? ''}
+                  onChange={(e) => updateLocalTranslation(sentence.id, e.target.value)}
+                  onBlur={(e) => saveTranslation(sentence.id, e.target.value)}
+                  style={textInputStyle(false)}
                 />
                 <button onClick={() => saveSentence(sentence)} disabled={savingId === sentence.id} style={saveButtonStyle(dirty)}>
                   {savingId === sentence.id ? 'Saving...' : 'Save'}
