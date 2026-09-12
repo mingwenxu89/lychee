@@ -104,7 +104,8 @@ const SHORTCUTS: { keys: string; description: string }[] = [
   { keys: 'Ctrl + >', description: 'Next sentence' },
   { keys: 'Ctrl + /', description: 'Reset' },
   { keys: 'Ctrl + Enter', description: 'Skip' },
-  { keys: 'Ctrl + M', description: 'Toggle microphone' }
+  { keys: 'Ctrl + M', description: 'Toggle microphone' },
+  { keys: 'Ctrl + F', description: 'Toggle favorite' }
 ]
 
 function formatTime(seconds: number): string {
@@ -137,6 +138,9 @@ export function SentencePracticeView({
   const [isRecording, setIsRecording] = useState(false)
   const [completedIndices, setCompletedIndices] = useState<Set<number>>(new Set())
   const [showShortcuts, setShowShortcuts] = useState(false)
+  const [favoritedSentenceIds, setFavoritedSentenceIds] = useState(
+    () => new Set(track.sentences.filter((s) => s.isFavorited).map((s) => s.id))
+  )
   const audioRef = useRef<HTMLAudioElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const recognizerRef = useRef<{ start: () => void; stop: () => void; resetSegment: () => void } | null>(null)
@@ -356,6 +360,27 @@ export function SentencePracticeView({
     handleAdvanceAndPlay(session.currentSentenceIndex + 1)
   }
 
+  async function handleToggleSentenceFavorite() {
+    if (!currentSentence) return
+    const sentenceId = currentSentence.id
+    const isFavorited = favoritedSentenceIds.has(sentenceId)
+    setFavoritedSentenceIds((prev) => {
+      const next = new Set(prev)
+      if (isFavorited) next.delete(sentenceId)
+      else next.add(sentenceId)
+      return next
+    })
+    const response = await fetch(`/api/learner/sentences/${sentenceId}/favorite`, { method: isFavorited ? 'DELETE' : 'PUT' })
+    if (!response.ok) {
+      setFavoritedSentenceIds((prev) => {
+        const next = new Set(prev)
+        if (isFavorited) next.add(sentenceId)
+        else next.delete(sentenceId)
+        return next
+      })
+    }
+  }
+
   function handleMicClick() {
     if (isRecording) {
       recognizerRef.current?.stop()
@@ -422,6 +447,10 @@ export function SentencePracticeView({
           e.preventDefault()
           ctrlComboFiredRef.current = true
           handleMicClick()
+        } else if (e.key.toLowerCase() === 'f') {
+          e.preventDefault()
+          ctrlComboFiredRef.current = true
+          handleToggleSentenceFavorite()
         }
         return
       }
@@ -448,7 +477,7 @@ export function SentencePracticeView({
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('keyup', handleKeyUp)
     }
-  }, [isReady, showShortcuts, session, result, answer, isRecording, currentSentence])
+  }, [isReady, showShortcuts, session, result, answer, isRecording, currentSentence, favoritedSentenceIds])
 
   if (error) return <p role="alert" style={{ color: 'var(--error)', fontWeight: 700 }}>{error}</p>
 
@@ -657,6 +686,25 @@ export function SentencePracticeView({
                 )}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <button
+                  onClick={handleToggleSentenceFavorite}
+                  disabled={!currentSentence}
+                  aria-label={currentSentence && favoritedSentenceIds.has(currentSentence.id) ? 'Remove sentence from favorites' : 'Add sentence to favorites'}
+                  aria-pressed={currentSentence ? favoritedSentenceIds.has(currentSentence.id) : false}
+                  title="Toggle favorite (Ctrl+F)"
+                  style={{ background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', flexShrink: 0 }}
+                >
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill={currentSentence && favoritedSentenceIds.has(currentSentence.id) ? 'var(--primary)' : 'none'}
+                    stroke={currentSentence && favoritedSentenceIds.has(currentSentence.id) ? 'var(--primary)' : 'var(--ink-faint)'}
+                    strokeWidth="2"
+                  >
+                    <path d="M12 21s-6.7-4.35-9.3-8.28C1.02 10.4 1.5 6.9 4.3 5.3a5 5 0 0 1 7 1.2 5 5 0 0 1 7-1.2c2.8 1.6 3.28 5.1 1.6 7.42C18.7 16.65 12 21 12 21z" strokeLinejoin="round" />
+                  </svg>
+                </button>
                 <button
                   onClick={handleTryAgain}
                   aria-label="Reset"

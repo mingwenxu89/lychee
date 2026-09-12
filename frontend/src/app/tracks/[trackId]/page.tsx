@@ -11,7 +11,7 @@ import { RecitationPanel } from './RecitationPanel'
 import { CompletionPage } from './CompletionPage'
 import { preloadAudio } from '@/lib/audioPreload'
 
-export type LearnerSentence = { id: string; index: number; text: string; startTime: string; endTime: string; translation: string | null }
+export type LearnerSentence = { id: string; index: number; text: string; startTime: string; endTime: string; isFavorited: boolean; translation: string | null }
 export type LearnerTrack = {
   id: string
   unitId: string

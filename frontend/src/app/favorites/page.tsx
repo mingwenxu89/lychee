@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { Pager } from '@/components/Pager'
+import { parseTimeSpanToSeconds } from '@/lib/timeSpan'
 
 type FavoriteTrack = {
   id: string
@@ -13,6 +14,19 @@ type FavoriteTrack = {
   level: string
   duration: string
   sentenceCount: number
+  favoritedAt: string
+}
+
+type FavoriteSentence = {
+  id: string
+  index: number
+  text: string
+  startTime: string
+  endTime: string
+  trackId: string
+  trackTitle: string
+  exerciseTitle: string
+  audioUrl: string
   favoritedAt: string
 }
 
@@ -49,47 +63,189 @@ function HeartIcon({ filled }: { filled: boolean }) {
   )
 }
 
+function formatTime(seconds: number): string {
+  if (!Number.isFinite(seconds)) return '0:00'
+  const total = Math.max(0, Math.round(seconds))
+  const m = Math.floor(total / 60)
+  const s = total % 60
+  return `${m}:${s.toString().padStart(2, '0')}`
+}
+
 export default function FavoritesPage() {
-  const [page, setPage] = useState(1)
-  const [data, setData] = useState<PagedResponse<FavoriteTrack> | null>(null)
+  const [tab, setTab] = useState<'tracks' | 'sentences'>('tracks')
+  const [tracksPage, setTracksPage] = useState(1)
+  const [sentencesPage, setSentencesPage] = useState(1)
+  const [tracks, setTracks] = useState<PagedResponse<FavoriteTrack> | null>(null)
+  const [sentences, setSentences] = useState<PagedResponse<FavoriteSentence> | null>(null)
+  const [playingSentenceId, setPlayingSentenceId] = useState<string | null>(null)
+  const audioRef = useRef<HTMLAudioElement>(null)
+  const playingSentenceRef = useRef<FavoriteSentence | null>(null)
 
   useEffect(() => {
     async function load() {
-      const response = await fetch(`/api/learner/favorites/tracks?page=${page}&pageSize=${PAGE_SIZE}`)
-      if (response.ok) setData(await response.json())
+      const response = await fetch(`/api/learner/favorites/tracks?page=${tracksPage}&pageSize=${PAGE_SIZE}`)
+      if (response.ok) setTracks(await response.json())
     }
     load()
-  }, [page])
+  }, [tracksPage])
+
+  useEffect(() => {
+    async function load() {
+      const response = await fetch(`/api/learner/favorites/sentences?page=${sentencesPage}&pageSize=${PAGE_SIZE}`)
+      if (response.ok) setSentences(await response.json())
+    }
+    load()
+  }, [sentencesPage])
+
+  useEffect(() => {
+    const audio = audioRef.current
+    if (!audio) return
+    function onTimeUpdate() {
+      const sentence = playingSentenceRef.current
+      if (!sentence || !audio) return
+      if (audio.currentTime >= parseTimeSpanToSeconds(sentence.endTime)) {
+        audio.pause()
+      }
+    }
+    function onPause() {
+      setPlayingSentenceId(null)
+      playingSentenceRef.current = null
+    }
+    audio.addEventListener('timeupdate', onTimeUpdate)
+    audio.addEventListener('pause', onPause)
+    return () => {
+      audio.removeEventListener('timeupdate', onTimeUpdate)
+      audio.removeEventListener('pause', onPause)
+    }
+  }, [])
+
+  async function handlePlaySentence(sentence: FavoriteSentence) {
+    const audio = audioRef.current
+    if (!audio) return
+    if (playingSentenceId === sentence.id) {
+      audio.pause()
+      return
+    }
+    if (audio.src !== sentence.audioUrl) {
+      audio.src = sentence.audioUrl
+    }
+    audio.currentTime = parseTimeSpanToSeconds(sentence.startTime)
+    playingSentenceRef.current = sentence
+    setPlayingSentenceId(sentence.id)
+    await audio.play()
+  }
 
   async function handleUnfavoriteTrack(trackId: string) {
-    setData((current) => (current
+    setTracks((current) => (current
       ? { ...current, items: current.items.filter((t) => t.id !== trackId), totalCount: current.totalCount - 1 }
       : current))
     await fetch(`/api/learner/tracks/${trackId}/favorite`, { method: 'DELETE' })
   }
 
+  async function handleUnfavoriteSentence(sentenceId: string) {
+    setSentences((current) => (current
+      ? { ...current, items: current.items.filter((s) => s.id !== sentenceId), totalCount: current.totalCount - 1 }
+      : current))
+    await fetch(`/api/learner/sentences/${sentenceId}/favorite`, { method: 'DELETE' })
+  }
+
   return (
     <main style={{ padding: '20px 40px', display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 820, margin: '0 auto' }}>
+      <audio ref={audioRef} />
       <h1 style={{ margin: 0, fontSize: 30, fontWeight: 700 }}>Favorites</h1>
 
-      {!data ? (
+      <div style={{ display: 'flex', gap: 6, background: 'oklch(90% 0.012 80)', padding: 6, borderRadius: 999, width: 'fit-content' }}>
+        <button
+          aria-current={tab === 'tracks' ? 'page' : undefined}
+          onClick={() => setTab('tracks')}
+          style={{
+            border: 'none', borderRadius: 999, fontWeight: 800, fontSize: 14, padding: '9px 22px', cursor: 'pointer',
+            background: tab === 'tracks' ? 'var(--primary)' : 'transparent',
+            color: tab === 'tracks' ? 'white' : 'var(--ink-soft)'
+          }}
+        >
+          Tracks
+        </button>
+        <button
+          aria-current={tab === 'sentences' ? 'page' : undefined}
+          onClick={() => setTab('sentences')}
+          style={{
+            border: 'none', borderRadius: 999, fontWeight: 800, fontSize: 14, padding: '9px 22px', cursor: 'pointer',
+            background: tab === 'sentences' ? 'var(--primary)' : 'transparent',
+            color: tab === 'sentences' ? 'white' : 'var(--ink-soft)'
+          }}
+        >
+          Sentences
+        </button>
+      </div>
+
+      {tab === 'tracks' ? (
+        !tracks ? (
+          <span style={{ color: 'var(--ink-soft)', fontWeight: 700 }}>Loading...</span>
+        ) : tracks.items.length === 0 ? (
+          <span style={{ color: 'var(--ink-faint)', fontWeight: 600 }}>No favorited tracks yet.</span>
+        ) : (
+          <>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {tracks.items.map((track) => (
+                <div key={track.id} style={cardStyle}>
+                  <Link href={`/tracks/${track.id}`} style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4, textDecoration: 'none', color: 'inherit', minWidth: 0 }}>
+                    <span style={{ fontWeight: 700, fontSize: 16 }}>{track.title}</span>
+                    <span style={{ fontSize: 13, color: 'var(--ink-faint)', fontWeight: 600 }}>
+                      {track.exerciseTitle} · {track.level} · {track.sentenceCount} sentences
+                    </span>
+                  </Link>
+                  <button
+                    onClick={() => handleUnfavoriteTrack(track.id)}
+                    aria-label={`Remove ${track.title} from favorites`}
+                    style={iconButtonStyle}
+                  >
+                    <HeartIcon filled />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <Pager page={tracks.page} pageSize={tracks.pageSize} totalCount={tracks.totalCount} onPageChange={setTracksPage} />
+          </>
+        )
+      ) : !sentences ? (
         <span style={{ color: 'var(--ink-soft)', fontWeight: 700 }}>Loading...</span>
-      ) : data.items.length === 0 ? (
-        <span style={{ color: 'var(--ink-faint)', fontWeight: 600 }}>No favorited tracks yet.</span>
+      ) : sentences.items.length === 0 ? (
+        <span style={{ color: 'var(--ink-faint)', fontWeight: 600 }}>No favorited sentences yet.</span>
       ) : (
         <>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            {data.items.map((track) => (
-              <div key={track.id} style={cardStyle}>
-                <Link href={`/tracks/${track.id}`} style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4, textDecoration: 'none', color: 'inherit', minWidth: 0 }}>
-                  <span style={{ fontWeight: 700, fontSize: 16 }}>{track.title}</span>
-                  <span style={{ fontSize: 13, color: 'var(--ink-faint)', fontWeight: 600 }}>
-                    {track.exerciseTitle} · {track.level} · {track.sentenceCount} sentences
-                  </span>
-                </Link>
+            {sentences.items.map((sentence) => (
+              <div key={sentence.id} style={cardStyle}>
                 <button
-                  onClick={() => handleUnfavoriteTrack(track.id)}
-                  aria-label={`Remove ${track.title} from favorites`}
+                  onClick={() => handlePlaySentence(sentence)}
+                  aria-label={playingSentenceId === sentence.id ? `Pause sentence` : `Play sentence: ${sentence.text}`}
+                  style={{
+                    ...iconButtonStyle,
+                    flex: 1,
+                    justifyContent: 'flex-start',
+                    gap: 16,
+                    minWidth: 0,
+                    textAlign: 'left'
+                  }}
+                >
+                  <span style={{ ...iconButtonStyle, width: 40, height: 40, borderRadius: 999, background: 'var(--primary)', flexShrink: 0 }}>
+                    {playingSentenceId === sentence.id ? (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="white"><rect x="6" y="5" width="4" height="14" /><rect x="14" y="5" width="4" height="14" /></svg>
+                    ) : (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z" /></svg>
+                    )}
+                  </span>
+                  <span style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
+                    <span style={{ fontSize: 16, fontWeight: 500, color: 'var(--ink)', lineHeight: 1.5 }}>{sentence.text}</span>
+                    <span style={{ fontSize: 13, color: 'var(--ink-faint)', fontWeight: 600 }}>
+                      {sentence.exerciseTitle} · {sentence.trackTitle} · {formatTime(parseTimeSpanToSeconds(sentence.startTime))}
+                    </span>
+                  </span>
+                </button>
+                <button
+                  onClick={() => handleUnfavoriteSentence(sentence.id)}
+                  aria-label="Remove sentence from favorites"
                   style={iconButtonStyle}
                 >
                   <HeartIcon filled />
@@ -97,7 +253,7 @@ export default function FavoritesPage() {
               </div>
             ))}
           </div>
-          <Pager page={data.page} pageSize={data.pageSize} totalCount={data.totalCount} onPageChange={setPage} />
+          <Pager page={sentences.page} pageSize={sentences.pageSize} totalCount={sentences.totalCount} onPageChange={setSentencesPage} />
         </>
       )}
     </main>

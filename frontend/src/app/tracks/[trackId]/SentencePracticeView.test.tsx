@@ -8,8 +8,8 @@ const track: LearnerTrack = {
   id: 'track-1', unitId: 'unit-1', exerciseId: 'exercise-1', title: 'Test Track', description: null, exerciseTitle: 'Test Exercise', level: 'A1', wordsPerMinute: 120, duration: '00:00:04',
   audioUrl: 'https://example.test/audio.mp3',
   sentences: [
-    { id: 's1', index: 1, text: 'Hello there.', startTime: '00:00:00', endTime: '00:00:02', translation: null },
-    { id: 's2', index: 2, text: 'Good morning.', startTime: '00:00:02', endTime: '00:00:04', translation: null }
+    { id: 's1', index: 1, text: 'Hello there.', startTime: '00:00:00', endTime: '00:00:02', isFavorited: false, translation: null },
+    { id: 's2', index: 2, text: 'Good morning.', startTime: '00:00:02', endTime: '00:00:04', isFavorited: false, translation: null }
   ],
   nextTrackId: null,
   isFavorited: false
@@ -799,6 +799,42 @@ describe('SentencePracticeView', () => {
       vi.unstubAllGlobals()
     })
   })
+
+  it('toggles the current sentence favorite and calls the favorite endpoint', async () => {
+    const fetchMock = mockFetchSequence([
+      new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 }),
+      new Response(null, { status: 204 })
+    ])
+
+    render(<SentencePracticeView track={track} onCompleted={vi.fn()} onBack={vi.fn()} audioObjectUrl="blob:fake" audioError={null} />)
+    await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add sentence to favorites' }))
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenLastCalledWith('/api/learner/sentences/s1/favorite', { method: 'PUT' })
+    })
+    expect(await screen.findByRole('button', { name: 'Remove sentence from favorites' })).toBeInTheDocument()
+  })
+
+  it('Ctrl+F toggles the current sentence favorite', async () => {
+    const fetchMock = mockFetchSequence([
+      new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 }),
+      new Response(null, { status: 204 })
+    ])
+
+    render(<SentencePracticeView track={track} onCompleted={vi.fn()} onBack={vi.fn()} audioObjectUrl="blob:fake" audioError={null} />)
+    await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
+
+    fireEvent.keyDown(window, { key: 'Control', ctrlKey: true })
+    fireEvent.keyDown(window, { key: 'f', ctrlKey: true })
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenLastCalledWith('/api/learner/sentences/s1/favorite', { method: 'PUT' })
+    })
+    expect(await screen.findByRole('button', { name: 'Remove sentence from favorites' })).toBeInTheDocument()
+  })
+
   it('shows the sentence translation under the result panel when available', async () => {
     const translatedTrack = {
       ...track,
