@@ -95,6 +95,7 @@ export default function TrackProofreadingPage() {
   const [saveError, setSaveError] = useState<string | null>(null)
   const [translationLanguage, setTranslationLanguage] = useState(SUPPORTED_TRANSLATION_LANGUAGES[0].code)
   const [translations, setTranslations] = useState<Record<string, Translation>>({})
+  const [originalTranslationById, setOriginalTranslationById] = useState<Record<string, string>>({})
   const [overwriteManualEdits, setOverwriteManualEdits] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
   const [generateError, setGenerateError] = useState<string | null>(null)
@@ -128,6 +129,7 @@ export default function TrackProofreadingPage() {
     if (response.ok) {
       const loaded: Translation[] = await response.json()
       setTranslations(Object.fromEntries(loaded.map((t) => [t.sentenceId, t])))
+      setOriginalTranslationById(Object.fromEntries(loaded.map((t) => [t.sentenceId, t.translatedText])))
     }
   }
 
@@ -158,6 +160,10 @@ export default function TrackProofreadingPage() {
       }
       const loaded: Translation[] = await response.json()
       setTranslations(Object.fromEntries(loaded.map((t) => [t.sentenceId, t])))
+      setOriginalTranslationById((current) => ({
+        ...current,
+        ...Object.fromEntries(loaded.map((t) => [t.sentenceId, t.translatedText]))
+      }))
     } finally {
       setIsGenerating(false)
     }
@@ -172,6 +178,7 @@ export default function TrackProofreadingPage() {
     if (response.ok) {
       const saved: Translation = await response.json()
       setTranslations((current) => ({ ...current, [sentenceId]: saved }))
+      setOriginalTranslationById((current) => ({ ...current, [sentenceId]: saved.translatedText }))
     }
   }
 
@@ -307,7 +314,10 @@ export default function TrackProofreadingPage() {
                   aria-label={`Sentence ${sentence.index} translation`}
                   value={translations[sentence.id]?.translatedText ?? ''}
                   onChange={(e) => updateLocalTranslation(sentence.id, e.target.value)}
-                  onBlur={(e) => saveTranslation(sentence.id, e.target.value)}
+                  onBlur={(e) => {
+                    const loaded = originalTranslationById[sentence.id] ?? ''
+                    if (e.target.value !== loaded) saveTranslation(sentence.id, e.target.value)
+                  }}
                   style={textInputStyle(false)}
                 />
                 <button onClick={() => saveSentence(sentence)} disabled={savingId === sentence.id} style={saveButtonStyle(dirty)}>

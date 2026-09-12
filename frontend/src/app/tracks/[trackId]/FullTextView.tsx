@@ -56,7 +56,7 @@ export function FullTextView({
   // read like a short passage rather than a synced caption list.
   const [isArticleView, setIsArticleView] = useState(false)
   const [showTranslation, setShowTranslation] = useState(false)
-  const hasAnyTranslation = track.sentences.some((s) => s.translation !== null)
+  const hasAnyTranslation = track.sentences.some((s) => !!s.translation)
   const [speed, setSpeed] = useState('1')
   const [activeIndex, setActiveIndex] = useState(0)
   const [currentTime, setCurrentTime] = useState(0)

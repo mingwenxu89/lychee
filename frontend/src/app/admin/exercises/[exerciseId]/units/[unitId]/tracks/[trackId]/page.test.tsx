@@ -175,6 +175,21 @@ describe('TrackProofreadingPage', () => {
     })
   })
 
+  it('does not save on blur when the translation value has not changed', async () => {
+    mockInitialLoad([sentence], [
+      { sentenceId: 'sentence-1', languageCode: 'zh', translatedText: '你好。', isManuallyEdited: false }
+    ])
+    render(<TrackProofreadingPage />)
+    const translationInput = await screen.findByDisplayValue('你好。')
+
+    fireEvent.blur(translationInput)
+
+    expect(fetch).not.toHaveBeenCalledWith(
+      '/api/admin/sentences/sentence-1/translations/zh',
+      expect.objectContaining({ method: 'PUT' })
+    )
+  })
+
   it('shows a generate error and does not clear existing translations', async () => {
     mockInitialLoad([sentence], [
       { sentenceId: 'sentence-1', languageCode: 'zh', translatedText: '你好。', isManuallyEdited: false }
