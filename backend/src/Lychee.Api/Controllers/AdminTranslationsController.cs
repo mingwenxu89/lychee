@@ -66,6 +66,11 @@ public class AdminTranslationsController : ControllerBase
                 return BadRequest(new { message = ex.Message });
             }
 
+            if (translations.Count != toTranslate.Count)
+            {
+                return BadRequest(new { message = $"Translation provider returned {translations.Count} results for {toTranslate.Count} sentences." });
+            }
+
             var now = DateTime.UtcNow;
             for (var i = 0; i < toTranslate.Count; i++)
             {

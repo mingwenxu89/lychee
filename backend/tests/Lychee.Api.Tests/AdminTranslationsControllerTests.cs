@@ -130,6 +130,25 @@ public class AdminTranslationsControllerTests : IClassFixture<LycheeWebApplicati
     }
 
     [Fact]
+    public async Task Generate_ProviderReturnsMismatchedCount_ReturnsBadRequestAndPersistsNothing()
+    {
+        var fakeProvider = new FakeTranslationProvider
+        {
+            Responder = (sentences, languageCode) => sentences.Select(s => $"[{languageCode}] {s}").Take(1).ToList()
+        };
+        var admin = AdminClient(fakeProvider);
+        var (trackId, _) = await CreateTrackWithSentencesAsync(admin);
+
+        var response = await admin.PostAsJsonAsync($"/api/admin/tracks/{trackId}/translations",
+            new { languageCode = "zh", overwriteManualEdits = false });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var list = await (await admin.GetAsync($"/api/admin/tracks/{trackId}/translations?languageCode=zh"))
+            .Content.ReadFromJsonAsync<List<SentenceTranslationResponse>>();
+        Assert.Empty(list!);
+    }
+
+    [Fact]
     public async Task Generate_NonExistentTrack_Returns404()
     {
         var response = await AdminClient(new FakeTranslationProvider())
