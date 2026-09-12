@@ -5,7 +5,9 @@ using System.Text;
 using Lychee.Api.Auth;
 using Lychee.Api.Controllers;
 using Lychee.Api.Translation;
+using Lychee.Data;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -189,7 +191,15 @@ public class AdminTranslationsControllerTests : IClassFixture<LycheeWebApplicati
     [Fact]
     public async Task UpdateTranslation_OverwritesExistingRow_KeepsProviderUnchanged()
     {
-        var admin = AdminClient(new FakeTranslationProvider());
+        var fakeProvider = new FakeTranslationProvider();
+        var factory = _factory.WithWebHostBuilder(builder =>
+            builder.ConfigureServices(services =>
+                services.AddSingleton<ITranslationProvider>(fakeProvider)));
+        var admin = factory.CreateClient();
+        var jwtTokenService = factory.Services.GetRequiredService<IJwtTokenService>();
+        admin.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", TestTokens.ForRole(jwtTokenService, "Admin"));
+
         var (trackId, sentenceIds) = await CreateTrackWithSentencesAsync(admin);
         await admin.PostAsJsonAsync($"/api/admin/tracks/{trackId}/translations",
             new { languageCode = "zh", overwriteManualEdits = false });
@@ -204,6 +214,14 @@ public class AdminTranslationsControllerTests : IClassFixture<LycheeWebApplicati
         var list = await (await admin.GetAsync($"/api/admin/tracks/{trackId}/translations?languageCode=zh"))
             .Content.ReadFromJsonAsync<List<SentenceTranslationResponse>>();
         Assert.Single(list!, r => r.SentenceId == sentenceIds[0] && r.TranslatedText == "改过的翻译");
+
+        // Verify Provider was not overwritten: should still be "fake" from the generation, not "manual"
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<LycheeDbContext>();
+        var dbRow = await db.SentenceTranslations
+            .FirstOrDefaultAsync(t => t.SentenceId == sentenceIds[0] && t.LanguageCode == "zh");
+        Assert.NotNull(dbRow);
+        Assert.Equal("fake", dbRow!.Provider);
     }
 
     [Fact]
