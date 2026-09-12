@@ -91,7 +91,7 @@ public class AdminTranslationsControllerTests : IClassFixture<LycheeWebApplicati
         var untouched = results!.Single(r => r.SentenceId == sentenceIds[0]);
         Assert.Equal("手动修正的翻译", untouched.TranslatedText);
         Assert.True(untouched.IsManuallyEdited);
-        var regenerated = results.Single(r => r.SentenceId == sentenceIds[1]);
+        var regenerated = results!.Single(r => r.SentenceId == sentenceIds[1]);
         Assert.Equal("[zh] Good morning.", regenerated.TranslatedText);
     }
 
