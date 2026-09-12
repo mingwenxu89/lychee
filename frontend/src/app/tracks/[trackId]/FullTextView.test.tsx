@@ -84,6 +84,55 @@ describe('FullTextView', () => {
     expect(window.HTMLMediaElement.prototype.play).toHaveBeenCalled()
   })
 
+  it('does not offer the Article View toggle until the transcript is revealed', () => {
+    render(<FullTextView track={track} audioObjectUrl="blob:fake" audioError={null} onStartRecite={vi.fn()} onStartFullDictation={vi.fn()} onStartBySentence={vi.fn()} />)
+
+    expect(screen.queryByRole('button', { name: /article view/i })).not.toBeInTheDocument()
+  })
+
+  it('switches to a plain, non-scrolling Article View that keeps line numbers but disables click-to-seek', () => {
+    render(<FullTextView track={track} audioObjectUrl="blob:fake" audioError={null} onStartRecite={vi.fn()} onStartFullDictation={vi.fn()} onStartBySentence={vi.fn()} />)
+    fireEvent.click(screen.getByRole('button', { name: /show text/i }))
+    fireEvent.click(screen.getByRole('button', { name: /article view/i }))
+
+    // Line numbers and text both still render, one sentence per line.
+    expect(screen.getByText('1')).toBeInTheDocument()
+    expect(screen.getByText('2')).toBeInTheDocument()
+    expect(screen.getByText('Hello there.')).toBeInTheDocument()
+    expect(screen.getByText('Good morning.')).toBeInTheDocument()
+
+    // No more click-to-seek: neither the trailing play buttons nor a row click do anything.
+    expect(screen.queryByRole('button', { name: /play sentence/i })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByText('Good morning.'))
+    const audio = document.querySelector('audio')!
+    expect(audio.currentTime).toBe(0)
+    expect(window.HTMLMediaElement.prototype.play).not.toHaveBeenCalled()
+
+    // The seek hint only makes sense when seeking is possible.
+    expect(screen.queryByText(/tap a sentence/i)).not.toBeInTheDocument()
+
+    // Toggling back returns to the normal synced/seekable view.
+    fireEvent.click(screen.getByRole('button', { name: /sync view/i }))
+    expect(screen.getByRole('button', { name: 'Play sentence 1' })).toBeInTheDocument()
+  })
+
+  it('keeps every line plain black in Article View regardless of playback position, unlike Sync View\'s done/active/upcoming shading', () => {
+    render(<FullTextView track={track} audioObjectUrl="blob:fake" audioError={null} onStartRecite={vi.fn()} onStartFullDictation={vi.fn()} onStartBySentence={vi.fn()} />)
+    fireEvent.click(screen.getByRole('button', { name: /show text/i }))
+    fireEvent.click(screen.getByRole('button', { name: /article view/i }))
+
+    // Advance playback into the second sentence — in Sync View this would color sentence 1
+    // "done" (ink-soft) and sentence 2 "active" (ink); Article View must ignore it entirely.
+    const audio = document.querySelector('audio')!
+    Object.defineProperty(audio, 'currentTime', { value: 3, writable: true })
+    fireEvent.timeUpdate(audio)
+
+    expect(screen.getByText('Hello there.')).toHaveStyle({ color: 'var(--ink)' })
+    expect(screen.getByText('Good morning.')).toHaveStyle({ color: 'var(--ink)' })
+    expect(screen.getByText('1')).toHaveStyle({ color: 'var(--ink)' })
+    expect(screen.getByText('2')).toHaveStyle({ color: 'var(--ink)' })
+  })
+
   it('calls onStartRecite when the Recite button is clicked — Recite is a full page now, not a modal rendered here', () => {
     const onStartRecite = vi.fn()
     render(<FullTextView track={track} audioObjectUrl="blob:fake" audioError={null} onStartRecite={onStartRecite} onStartFullDictation={vi.fn()} onStartBySentence={vi.fn()} />)
