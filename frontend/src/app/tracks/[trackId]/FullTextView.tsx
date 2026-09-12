@@ -55,6 +55,8 @@ export function FullTextView({
   // full transcript at once, no scrolling, no click-to-seek — just numbered lines set tighter, to
   // read like a short passage rather than a synced caption list.
   const [isArticleView, setIsArticleView] = useState(false)
+  const [showTranslation, setShowTranslation] = useState(false)
+  const hasAnyTranslation = track.sentences.some((s) => s.translation !== null)
   const [speed, setSpeed] = useState('1')
   const [activeIndex, setActiveIndex] = useState(0)
   const [currentTime, setCurrentTime] = useState(0)
@@ -267,6 +269,24 @@ export function FullTextView({
                 {isArticleView ? 'Sync View' : 'Article View'}
               </button>
             )}
+            {showText && hasAnyTranslation && (
+              <button
+                onClick={() => setShowTranslation(!showTranslation)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  color: 'var(--ink-soft)',
+                  fontWeight: 800,
+                  fontSize: 13,
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer'
+                }}
+              >
+                {showTranslation ? 'Hide Translation' : 'Show Translation'}
+              </button>
+            )}
           </div>
           {!isArticleView && (
             <span style={{ fontSize: 13, color: 'var(--ink-faint)', fontWeight: 600 }}>
@@ -302,17 +322,24 @@ export function FullTextView({
                   <span style={{ fontWeight: 800, fontSize: 13, lineHeight: '27.2px', width: 22, flexShrink: 0, color: isArticleView ? 'var(--ink)' : isActive ? 'var(--ink)' : 'var(--ink-faint)' }}>
                     {i + 1}
                   </span>
-                  <span
-                    style={{
-                      fontSize: 17,
-                      // Article View is a pure, static display of the text — no color or weight
-                      // tied to playback position (that's Sync View's job).
-                      fontWeight: !isArticleView && isActive ? 500 : 400,
-                      lineHeight: 1.6,
-                      color: isArticleView ? 'var(--ink)' : isActive ? 'var(--ink)' : isDone ? 'var(--ink-soft)' : 'var(--ink-faint)'
-                    }}
-                  >
-                    {s.text}
+                  <span style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+                    <span
+                      style={{
+                        fontSize: 17,
+                        // Article View is a pure, static display of the text — no color or weight
+                        // tied to playback position (that's Sync View's job).
+                        fontWeight: !isArticleView && isActive ? 500 : 400,
+                        lineHeight: 1.6,
+                        color: isArticleView ? 'var(--ink)' : isActive ? 'var(--ink)' : isDone ? 'var(--ink-soft)' : 'var(--ink-faint)'
+                      }}
+                    >
+                      {s.text}
+                    </span>
+                    {showTranslation && s.translation && (
+                      <span style={{ fontSize: 14, color: 'var(--ink-faint)', fontWeight: 500 }}>
+                        {s.translation}
+                      </span>
+                    )}
                   </span>
                   {!isArticleView && (
                     <button
