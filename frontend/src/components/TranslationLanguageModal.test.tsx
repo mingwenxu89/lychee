@@ -49,4 +49,23 @@ describe('TranslationLanguageModal', () => {
       }))
     })
   })
+
+  it('shows an error and does not close when the save fails', async () => {
+    const onClose = vi.fn()
+    vi.mocked(fetch).mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.toString()
+      if (url.includes('/api/learner/preferences/translation-language') && (!init || init.method === undefined)) {
+        return new Response(JSON.stringify({ languageCode: 'zh' }), { status: 200 })
+      }
+      return new Response(null, { status: 500 })
+    })
+
+    render(<TranslationLanguageModal onClose={onClose} />)
+    await screen.findByRole('combobox')
+
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
+
+    expect(await screen.findByRole('alert')).toBeInTheDocument()
+    expect(onClose).not.toHaveBeenCalled()
+  })
 })

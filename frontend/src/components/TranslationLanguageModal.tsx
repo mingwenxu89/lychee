@@ -61,6 +61,7 @@ const btnGhost: React.CSSProperties = {
 export function TranslationLanguageModal({ onClose }: { onClose: () => void }) {
   const [languageCode, setLanguageCode] = useState('')
   const [isSaving, setIsSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     async function load() {
@@ -75,13 +76,19 @@ export function TranslationLanguageModal({ onClose }: { onClose: () => void }) {
 
   async function handleSave() {
     setIsSaving(true)
+    setError(null)
     try {
-      await fetch('/api/learner/preferences/translation-language', {
+      const response = await fetch('/api/learner/preferences/translation-language', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ languageCode: languageCode || null })
       })
+      if (!response.ok) {
+        throw new Error('Failed to save. Please try again.')
+      }
       onClose()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save. Please try again.')
     } finally {
       setIsSaving(false)
     }
@@ -112,6 +119,12 @@ export function TranslationLanguageModal({ onClose }: { onClose: () => void }) {
             <option key={lang.code} value={lang.code}>{lang.displayName}</option>
           ))}
         </select>
+
+        {error && (
+          <p role="alert" style={{ color: 'var(--error)', fontWeight: 700, margin: 0, fontSize: 14 }}>
+            {error}
+          </p>
+        )}
 
         <div style={{ display: 'flex', gap: 14, justifyContent: 'flex-end', marginTop: 4 }}>
           <button type="button" onClick={onClose} style={btnGhost}>Cancel</button>
