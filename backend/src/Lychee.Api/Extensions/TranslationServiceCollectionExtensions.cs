@@ -11,7 +11,10 @@ public static class TranslationServiceCollectionExtensions
         var provider = configuration["Translation:Provider"] ?? "None";
         if (string.Equals(provider, "DeepSeek", StringComparison.OrdinalIgnoreCase))
         {
-            services.AddHttpClient<ITranslationProvider, DeepSeekTranslationProvider>();
+            // A whole-track translation batch call can legitimately take a while - the default
+            // 100-second HttpClient timeout is too tight for that, so give it a generous ceiling.
+            services.AddHttpClient<ITranslationProvider, DeepSeekTranslationProvider>(
+                client => client.Timeout = TimeSpan.FromMinutes(5));
         }
         else
         {

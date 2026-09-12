@@ -54,6 +54,14 @@ public class DeepSeekTranslationProvider : ITranslationProvider
         {
             throw new TranslationProviderException($"Could not reach DeepSeek API: {ex.Message}");
         }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            // HttpClient surfaces its own request timeout (e.g. the configured Timeout being
+            // exceeded) as a TaskCanceledException/OperationCanceledException rather than an
+            // HttpRequestException. Only treat it as a timeout when the caller's own token wasn't
+            // the one cancelled - otherwise this is a genuine cancellation and should propagate.
+            throw new TranslationProviderException("DeepSeek API request timed out.");
+        }
 
         using (response)
         {

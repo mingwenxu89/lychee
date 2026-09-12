@@ -122,6 +122,16 @@ public class DeepSeekTranslationProviderTests
     }
 
     [Fact]
+    public async Task TranslateBatchAsync_RequestTimesOut_ThrowsTranslationProviderException()
+    {
+        var handler = new FakeHttpMessageHandler(_ => throw new TaskCanceledException("The request timed out."));
+        var provider = CreateProvider(handler, out _);
+
+        await Assert.ThrowsAsync<TranslationProviderException>(
+            () => provider.TranslateBatchAsync(new[] { "Hello." }, "zh"));
+    }
+
+    [Fact]
     public void Constructor_MissingApiKey_Throws()
     {
         var httpClient = new HttpClient();
