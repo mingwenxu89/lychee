@@ -301,6 +301,62 @@ namespace Lychee.Data.Migrations
                     b.ToTable("Sentences");
                 });
 
+            modelBuilder.Entity("Lychee.Data.Entities.SentenceFavorite", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("SentenceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("UserId", "SentenceId");
+
+                    b.HasIndex("SentenceId");
+
+                    b.ToTable("SentenceFavorites");
+                });
+
+            modelBuilder.Entity("Lychee.Data.Entities.SentenceTranslation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsManuallyEdited")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("LanguageCode")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("SentenceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TranslatedText")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SentenceId", "LanguageCode")
+                        .IsUnique();
+
+                    b.ToTable("SentenceTranslations");
+                });
+
             modelBuilder.Entity("Lychee.Data.Entities.Track", b =>
                 {
                     b.Property<Guid>("Id")
@@ -615,6 +671,36 @@ namespace Lychee.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Track");
+                });
+
+            modelBuilder.Entity("Lychee.Data.Entities.SentenceFavorite", b =>
+                {
+                    b.HasOne("Lychee.Data.Entities.Sentence", "Sentence")
+                        .WithMany()
+                        .HasForeignKey("SentenceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Lychee.Data.Entities.ApplicationUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Sentence");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Lychee.Data.Entities.SentenceTranslation", b =>
+                {
+                    b.HasOne("Lychee.Data.Entities.Sentence", "Sentence")
+                        .WithMany()
+                        .HasForeignKey("SentenceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Sentence");
                 });
 
             modelBuilder.Entity("Lychee.Data.Entities.Track", b =>
