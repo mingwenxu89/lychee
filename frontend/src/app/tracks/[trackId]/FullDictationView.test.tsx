@@ -8,8 +8,8 @@ const track: LearnerTrack = {
   exerciseTitle: 'Test Exercise', level: 'A1', wordsPerMinute: 120, duration: '00:00:04',
   audioUrl: 'https://example.test/audio.mp3',
   sentences: [
-    { id: 's1', index: 0, text: 'Hello there.', startTime: '00:00:00', endTime: '00:00:02' },
-    { id: 's2', index: 1, text: 'Good morning.', startTime: '00:00:02', endTime: '00:00:04' }
+    { id: 's1', index: 0, text: 'Hello there.', startTime: '00:00:00', endTime: '00:00:02', translation: null },
+    { id: 's2', index: 1, text: 'Good morning.', startTime: '00:00:02', endTime: '00:00:04', translation: null }
   ],
   nextTrackId: null, isFavorited: false
 }
@@ -345,9 +345,9 @@ describe('FullDictationView — Blind round', () => {
     const threeSentenceTrack: LearnerTrack = {
       ...track,
       sentences: [
-        { id: 's1', index: 0, text: 'Hello there.', startTime: '00:00:00', endTime: '00:00:02' },
-        { id: 's2', index: 1, text: 'Good morning.', startTime: '00:00:02', endTime: '00:00:04' },
-        { id: 's3', index: 2, text: 'How are you?', startTime: '00:00:04', endTime: '00:00:06' }
+        { id: 's1', index: 0, text: 'Hello there.', startTime: '00:00:00', endTime: '00:00:02', translation: null },
+        { id: 's2', index: 1, text: 'Good morning.', startTime: '00:00:02', endTime: '00:00:04', translation: null },
+        { id: 's3', index: 2, text: 'How are you?', startTime: '00:00:04', endTime: '00:00:06', translation: null }
       ]
     }
     const fetchMock = mockFetch()

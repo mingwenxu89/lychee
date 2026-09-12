@@ -7,8 +7,8 @@ const track: LearnerTrack = {
   id: 'track-1', unitId: 'unit-1', exerciseId: 'exercise-1', title: 'Test Track', description: null, exerciseTitle: 'Test Exercise', level: 'A1', wordsPerMinute: 120, duration: '00:00:04',
   audioUrl: 'https://example.test/audio.mp3',
   sentences: [
-    { id: 's1', index: 1, text: 'Hello there.', startTime: '00:00:00', endTime: '00:00:02' },
-    { id: 's2', index: 2, text: 'Good morning.', startTime: '00:00:02', endTime: '00:00:04' }
+    { id: 's1', index: 1, text: 'Hello there.', startTime: '00:00:00', endTime: '00:00:02', translation: null },
+    { id: 's2', index: 2, text: 'Good morning.', startTime: '00:00:02', endTime: '00:00:04', translation: null }
   ],
   nextTrackId: null,
   isFavorited: false
@@ -198,6 +198,47 @@ describe('FullTextView', () => {
     select.blur()
     fireEvent.keyDown(window, { key: ' ' })
     expect(window.HTMLMediaElement.prototype.play).toHaveBeenCalled()
+  })
+
+  it('does not offer Show Translation when no sentence in this track has a translation', () => {
+    render(<FullTextView track={track} audioObjectUrl="blob:fake" audioError={null} onStartRecite={vi.fn()} onStartFullDictation={vi.fn()} onStartBySentence={vi.fn()} />)
+    fireEvent.click(screen.getByRole('button', { name: /show text/i }))
+
+    expect(screen.queryByRole('button', { name: /show translation/i })).not.toBeInTheDocument()
+  })
+
+  it('shows a translation line under each sentence when Show Translation is on', () => {
+    const withTranslations = {
+      ...track,
+      sentences: [
+        { ...track.sentences[0], translation: '你好。' },
+        { ...track.sentences[1], translation: '早上好。' }
+      ]
+    }
+    render(<FullTextView track={withTranslations} audioObjectUrl="blob:fake" audioError={null} onStartRecite={vi.fn()} onStartFullDictation={vi.fn()} onStartBySentence={vi.fn()} />)
+    fireEvent.click(screen.getByRole('button', { name: /show text/i }))
+
+    fireEvent.click(screen.getByRole('button', { name: /show translation/i }))
+
+    expect(screen.getByText('你好。')).toBeInTheDocument()
+    expect(screen.getByText('早上好。')).toBeInTheDocument()
+  })
+
+  it('shows translations in Article View too', () => {
+    const withTranslations = {
+      ...track,
+      sentences: [
+        { ...track.sentences[0], translation: '你好。' },
+        { ...track.sentences[1], translation: '早上好。' }
+      ]
+    }
+    render(<FullTextView track={withTranslations} audioObjectUrl="blob:fake" audioError={null} onStartRecite={vi.fn()} onStartFullDictation={vi.fn()} onStartBySentence={vi.fn()} />)
+    fireEvent.click(screen.getByRole('button', { name: /show text/i }))
+    fireEvent.click(screen.getByRole('button', { name: /article view/i }))
+
+    fireEvent.click(screen.getByRole('button', { name: /show translation/i }))
+
+    expect(screen.getByText('你好。')).toBeInTheDocument()
   })
 
 })
