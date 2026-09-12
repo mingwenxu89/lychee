@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Lychee.Api.Controllers;
 
-public record LearnerSentenceResponse(Guid Id, int Index, string Text, TimeSpan StartTime, TimeSpan EndTime, string? Translation);
+public record LearnerSentenceResponse(Guid Id, int Index, string Text, TimeSpan StartTime, TimeSpan EndTime, bool IsFavorited, string? Translation);
 
 public record LearnerTrackResponse(
     Guid Id, Guid UnitId, Guid ExerciseId, string Title, string? Description, string ExerciseTitle, string Level,
@@ -51,6 +51,10 @@ public class LearnerTracksController : ControllerBase
 
         var userId = User.GetUserId();
         var isTrackFavorited = await _db.TrackFavorites.AnyAsync(f => f.UserId == userId && f.TrackId == track.Id);
+        var favoritedSentenceIds = await _db.SentenceFavorites
+            .Where(f => f.UserId == userId && f.Sentence.TrackId == track.Id)
+            .Select(f => f.SentenceId)
+            .ToHashSetAsync();
 
         var user = await _db.Users.FindAsync(userId);
         var translationBySentenceId = new Dictionary<Guid, string>();
@@ -64,7 +68,7 @@ public class LearnerTracksController : ControllerBase
         var sentences = track.Sentences
             .OrderBy(s => s.Index)
             .Select(s => new LearnerSentenceResponse(
-                s.Id, s.Index, s.Text, s.StartTime, s.EndTime,
+                s.Id, s.Index, s.Text, s.StartTime, s.EndTime, favoritedSentenceIds.Contains(s.Id),
                 translationBySentenceId.TryGetValue(s.Id, out var translated) ? translated : null))
             .ToList();
 

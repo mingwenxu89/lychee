@@ -40,6 +40,12 @@ public class LearnerFavoritesControllerTests : IClassFixture<LycheeWebApplicatio
 
     private static async Task<Guid> CreateTrackAsync(HttpClient adminClient, string sentenceText = "Hello there.")
     {
+        var (trackId, _) = await CreateTrackWithSentenceAsync(adminClient, sentenceText);
+        return trackId;
+    }
+
+    private static async Task<(Guid TrackId, Guid SentenceId)> CreateTrackWithSentenceAsync(HttpClient adminClient, string sentenceText = "Hello there.")
+    {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         var exerciseResponse = await adminClient.PostAsJsonAsync("/api/admin/exercises",
             new { title = $"Exercise {suffix}", description = (string?)null, coverImageUrl = (string?)null });
@@ -59,7 +65,10 @@ public class LearnerFavoritesControllerTests : IClassFixture<LycheeWebApplicatio
         var trackResponse = await adminClient.PostAsync($"/api/admin/units/{unit!.Id}/tracks", form);
         var track = await trackResponse.Content.ReadFromJsonAsync<IdOnly>();
 
-        return track!.Id;
+        var sentencesResponse = await adminClient.GetAsync($"/api/admin/tracks/{track!.Id}/sentences");
+        var sentences = await sentencesResponse.Content.ReadFromJsonAsync<List<IdOnly>>();
+
+        return (track.Id, sentences![0].Id);
     }
 
     [Fact]
@@ -88,6 +97,49 @@ public class LearnerFavoritesControllerTests : IClassFixture<LycheeWebApplicatio
 
         var listAfter = await (await learner.GetAsync("/api/learner/favorites/tracks")).Content.ReadFromJsonAsync<PagedResponse<FavoriteTrackResponse>>();
         Assert.DoesNotContain(listAfter!.Items, t => t.Id == trackId);
+    }
+
+    [Fact]
+    public async Task FavoriteSentence_ThenUnfavorite_TogglesCorrectlyAndIsIdempotent()
+    {
+        var admin = AdminClient();
+        var (trackId, sentenceId) = await CreateTrackWithSentenceAsync(admin, "A gentle sentence.");
+        var learner = await LearnerClientAsync();
+
+        var favoriteOnce = await learner.PutAsync($"/api/learner/sentences/{sentenceId}/favorite", null);
+        Assert.Equal(HttpStatusCode.NoContent, favoriteOnce.StatusCode);
+        var favoriteTwice = await learner.PutAsync($"/api/learner/sentences/{sentenceId}/favorite", null);
+        Assert.Equal(HttpStatusCode.NoContent, favoriteTwice.StatusCode);
+
+        var listResponse = await learner.GetAsync("/api/learner/favorites/sentences");
+        var list = await listResponse.Content.ReadFromJsonAsync<PagedResponse<FavoriteSentenceResponse>>();
+        var favorited = Assert.Single(list!.Items, s => s.Id == sentenceId);
+        Assert.Equal("A gentle sentence.", favorited.Text);
+        Assert.Equal(trackId, favorited.TrackId);
+        Assert.Equal("Test Track", favorited.TrackTitle);
+        Assert.False(string.IsNullOrEmpty(favorited.AudioUrl));
+
+        var trackDetail = await (await learner.GetAsync($"/api/learner/tracks/{trackId}")).Content.ReadFromJsonAsync<LearnerTrackResponse>();
+        Assert.True(trackDetail!.Sentences.Single(s => s.Id == sentenceId).IsFavorited);
+
+        var unfavoriteOnce = await learner.DeleteAsync($"/api/learner/sentences/{sentenceId}/favorite");
+        Assert.Equal(HttpStatusCode.NoContent, unfavoriteOnce.StatusCode);
+        var unfavoriteTwice = await learner.DeleteAsync($"/api/learner/sentences/{sentenceId}/favorite");
+        Assert.Equal(HttpStatusCode.NoContent, unfavoriteTwice.StatusCode);
+
+        var listAfter = await (await learner.GetAsync("/api/learner/favorites/sentences")).Content.ReadFromJsonAsync<PagedResponse<FavoriteSentenceResponse>>();
+        Assert.DoesNotContain(listAfter!.Items, s => s.Id == sentenceId);
+
+        var trackDetailAfter = await (await learner.GetAsync($"/api/learner/tracks/{trackId}")).Content.ReadFromJsonAsync<LearnerTrackResponse>();
+        Assert.False(trackDetailAfter!.Sentences.Single(s => s.Id == sentenceId).IsFavorited);
+    }
+
+    [Fact]
+    public async Task FavoriteSentence_NonExistentSentence_Returns404()
+    {
+        var response = await (await LearnerClientAsync()).PutAsync($"/api/learner/sentences/{Guid.NewGuid()}/favorite", null);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     [Fact]
