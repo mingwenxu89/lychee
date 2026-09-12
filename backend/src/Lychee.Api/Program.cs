@@ -58,6 +58,7 @@ builder.Services.AddAuthorization();
 builder.Services.AddScoped<Lychee.Api.Auth.ExternalLoginService>();
 
 builder.Services.AddLycheeStorage(builder.Configuration);
+builder.Services.AddLycheeTranslation(builder.Configuration);
 
 // The browser fetches audio bytes directly from this app's static-file host (for local dev
 // storage) rather than through the same-origin Next.js proxy — <audio> playback and the
