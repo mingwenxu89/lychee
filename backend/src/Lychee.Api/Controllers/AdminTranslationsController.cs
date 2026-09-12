@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 namespace Lychee.Api.Controllers;
 
 public record GenerateTranslationsRequest(string LanguageCode, bool OverwriteManualEdits = false);
+public record UpdateSentenceTranslationRequest(string TranslatedText);
 public record SentenceTranslationResponse(Guid SentenceId, string LanguageCode, string TranslatedText, bool IsManuallyEdited);
 
 [ApiController]
@@ -104,5 +105,35 @@ public class AdminTranslationsController : ControllerBase
             .Where(t => t.LanguageCode == request.LanguageCode && sentenceIds.Contains(t.SentenceId))
             .ToListAsync();
         return Ok(all.Select(ToResponse));
+    }
+
+    [HttpPut("api/admin/sentences/{sentenceId}/translations/{languageCode}")]
+    public async Task<IActionResult> UpdateTranslation(Guid sentenceId, string languageCode, UpdateSentenceTranslationRequest request)
+    {
+        var sentenceExists = await _db.Sentences.AnyAsync(s => s.Id == sentenceId);
+        if (!sentenceExists) return NotFound();
+
+        var translation = await _db.SentenceTranslations
+            .FirstOrDefaultAsync(t => t.SentenceId == sentenceId && t.LanguageCode == languageCode);
+        var now = DateTime.UtcNow;
+        if (translation is null)
+        {
+            translation = new SentenceTranslation
+            {
+                Id = Guid.NewGuid(),
+                SentenceId = sentenceId,
+                LanguageCode = languageCode,
+                Provider = "manual",
+                CreatedAt = now
+            };
+            _db.SentenceTranslations.Add(translation);
+        }
+
+        translation.TranslatedText = request.TranslatedText;
+        translation.IsManuallyEdited = true;
+        translation.UpdatedAt = now;
+        await _db.SaveChangesAsync();
+
+        return Ok(ToResponse(translation));
     }
 }

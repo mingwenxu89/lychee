@@ -171,5 +171,49 @@ public class AdminTranslationsControllerTests : IClassFixture<LycheeWebApplicati
         Assert.Empty(list!);
     }
 
+    [Fact]
+    public async Task UpdateTranslation_CreatesRowIfNoneExists_MarkedManuallyEdited()
+    {
+        var admin = AdminClient();
+        var (_, sentenceIds) = await CreateTrackWithSentencesAsync(admin);
+
+        var response = await admin.PutAsJsonAsync($"/api/admin/sentences/{sentenceIds[0]}/translations/zh",
+            new { translatedText = "你好。" });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var result = await response.Content.ReadFromJsonAsync<SentenceTranslationResponse>();
+        Assert.Equal("你好。", result!.TranslatedText);
+        Assert.True(result.IsManuallyEdited);
+    }
+
+    [Fact]
+    public async Task UpdateTranslation_OverwritesExistingRow_KeepsProviderUnchanged()
+    {
+        var admin = AdminClient(new FakeTranslationProvider());
+        var (trackId, sentenceIds) = await CreateTrackWithSentencesAsync(admin);
+        await admin.PostAsJsonAsync($"/api/admin/tracks/{trackId}/translations",
+            new { languageCode = "zh", overwriteManualEdits = false });
+
+        var response = await admin.PutAsJsonAsync($"/api/admin/sentences/{sentenceIds[0]}/translations/zh",
+            new { translatedText = "改过的翻译" });
+
+        var result = await response.Content.ReadFromJsonAsync<SentenceTranslationResponse>();
+        Assert.Equal("改过的翻译", result!.TranslatedText);
+        Assert.True(result.IsManuallyEdited);
+
+        var list = await (await admin.GetAsync($"/api/admin/tracks/{trackId}/translations?languageCode=zh"))
+            .Content.ReadFromJsonAsync<List<SentenceTranslationResponse>>();
+        Assert.Single(list!, r => r.SentenceId == sentenceIds[0] && r.TranslatedText == "改过的翻译");
+    }
+
+    [Fact]
+    public async Task UpdateTranslation_NonExistentSentence_Returns404()
+    {
+        var response = await AdminClient().PutAsJsonAsync(
+            $"/api/admin/sentences/{Guid.NewGuid()}/translations/zh", new { translatedText = "x" });
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
     private record IdOnly(Guid Id);
 }
