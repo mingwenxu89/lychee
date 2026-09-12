@@ -799,4 +799,36 @@ describe('SentencePracticeView', () => {
       vi.unstubAllGlobals()
     })
   })
+  it('shows the sentence translation under the result panel when available', async () => {
+    const translatedTrack = {
+      ...track,
+      sentences: [{ ...track.sentences[0], translation: '你好啊。' }, track.sentences[1]]
+    }
+    mockFetchSequence([
+      new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 }),
+      new Response(JSON.stringify({ accuracyScore: 1, isCorrect: true, words: [{ word: 'Hello ', status: 'Correct' }, { word: 'there.', status: 'Correct' }] }), { status: 200 })
+    ])
+
+    render(<SentencePracticeView track={translatedTrack} onCompleted={vi.fn()} onBack={vi.fn()} audioObjectUrl="blob:fake" audioError={null} />)
+    await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Hello there.' } })
+    fireEvent.click(screen.getByRole('button', { name: /^check$/i }))
+
+    expect(await screen.findByText('你好啊。')).toBeInTheDocument()
+  })
+
+  it('does not show a translation line when the sentence has none', async () => {
+    mockFetchSequence([
+      new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 }),
+      new Response(JSON.stringify({ accuracyScore: 1, isCorrect: true, words: [{ word: 'Hello ', status: 'Correct' }, { word: 'there.', status: 'Correct' }] }), { status: 200 })
+    ])
+
+    render(<SentencePracticeView track={track} onCompleted={vi.fn()} onBack={vi.fn()} audioObjectUrl="blob:fake" audioError={null} />)
+    await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Hello there.' } })
+    fireEvent.click(screen.getByRole('button', { name: /^check$/i }))
+
+    await screen.findByText('Nice — that\'s right!')
+    expect(screen.queryByText('你好啊。')).not.toBeInTheDocument()
+  })
 })

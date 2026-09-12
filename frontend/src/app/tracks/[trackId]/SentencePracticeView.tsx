@@ -763,6 +763,11 @@ export function SentencePracticeView({
               <div style={{ fontSize: 17, lineHeight: 1.8, fontWeight: 400 }}>
                 <DiffText words={result.words} variant="dictation" firstMismatchOnly />
               </div>
+              {currentSentence?.translation && (
+                <span style={{ fontSize: 15, color: 'var(--ink-faint)', fontWeight: 500 }}>
+                  {currentSentence.translation}
+                </span>
+              )}
             </div>
           )}
 
