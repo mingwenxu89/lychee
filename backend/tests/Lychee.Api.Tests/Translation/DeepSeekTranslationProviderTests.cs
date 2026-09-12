@@ -96,6 +96,32 @@ public class DeepSeekTranslationProviderTests
     }
 
     [Fact]
+    public async Task TranslateBatchAsync_MalformedOuterEnvelope_Throws()
+    {
+        var handler = new FakeHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("<html>not json at all</html>")
+        });
+        var provider = CreateProvider(handler, out _);
+
+        await Assert.ThrowsAsync<TranslationProviderException>(
+            () => provider.TranslateBatchAsync(new[] { "Hello." }, "zh"));
+    }
+
+    [Fact]
+    public async Task TranslateBatchAsync_ChoiceMissingMessage_Throws()
+    {
+        var handler = new FakeHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = JsonContent.Create(new { choices = new object[] { new { } } })
+        });
+        var provider = CreateProvider(handler, out _);
+
+        await Assert.ThrowsAsync<TranslationProviderException>(
+            () => provider.TranslateBatchAsync(new[] { "Hello." }, "zh"));
+    }
+
+    [Fact]
     public void Constructor_MissingApiKey_Throws()
     {
         var httpClient = new HttpClient();

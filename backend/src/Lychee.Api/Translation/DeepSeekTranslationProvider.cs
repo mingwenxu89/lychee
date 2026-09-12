@@ -63,8 +63,17 @@ public class DeepSeekTranslationProvider : ITranslationProvider
                 throw new TranslationProviderException($"DeepSeek API request failed ({(int)response.StatusCode}): {errorBody}");
             }
 
-            var completion = await response.Content.ReadFromJsonAsync<ChatCompletionResponse>(cancellationToken: ct);
-            var content = completion?.Choices.FirstOrDefault()?.Message.Content;
+            ChatCompletionResponse? completion;
+            try
+            {
+                completion = await response.Content.ReadFromJsonAsync<ChatCompletionResponse>(cancellationToken: ct);
+            }
+            catch (Exception ex) when (ex is JsonException or NotSupportedException)
+            {
+                throw new TranslationProviderException($"DeepSeek API returned an unparseable response: {ex.Message}");
+            }
+
+            var content = completion?.Choices.FirstOrDefault()?.Message?.Content;
             if (string.IsNullOrEmpty(content))
             {
                 throw new TranslationProviderException("DeepSeek API returned an empty response.");
@@ -99,7 +108,7 @@ public class DeepSeekTranslationProvider : ITranslationProvider
     private class Choice
     {
         [JsonPropertyName("message")]
-        public Message Message { get; set; } = null!;
+        public Message? Message { get; set; }
     }
 
     private class Message
