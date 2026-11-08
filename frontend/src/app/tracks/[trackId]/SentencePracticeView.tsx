@@ -642,6 +642,17 @@ export function SentencePracticeView({
                 // diff box (and, for a correct result, the Next button in its place) must not
                 // keep showing stale feedback for text the learner has since changed.
                 if (result) setResult(null)
+                // This only fires on a real keystroke, never on the recognizer's own updates (a
+                // controlled value= change doesn't dispatch a DOM change event) — so it's a clean
+                // signal that the learner just typed or deleted something by hand. The mic's
+                // "already recognized" text is still the un-edited baseAnswerRef snapshot plus
+                // everything recognized since recording started, which would otherwise silently
+                // restore anything just deleted the next time it fires. Treat this edit as the
+                // new baseline and tell the recognizer to forget everything before it.
+                if (isRecording) {
+                  baseAnswerRef.current = e.target.value
+                  recognizerRef.current?.resetSegment()
+                }
               }}
               placeholder="Type what you hear, or tap the mic to speak it instead"
               disabled={!isReady}

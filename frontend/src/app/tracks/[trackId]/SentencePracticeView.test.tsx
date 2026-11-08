@@ -529,6 +529,45 @@ describe('SentencePracticeView', () => {
     vi.unstubAllGlobals()
   })
 
+  it('does not restore a recognized word the learner deletes mid-recording, once more speech is recognized', async () => {
+    class FakeSpeechRecognition {
+      continuous = false
+      interimResults = false
+      onresult: ((event: unknown) => void) | null = null
+      onend: (() => void) | null = null
+      start = vi.fn()
+      stop = vi.fn()
+    }
+    let fakeInstance: FakeSpeechRecognition
+    vi.stubGlobal('SpeechRecognition', vi.fn().mockImplementation(function (this: unknown) {
+      fakeInstance = new FakeSpeechRecognition()
+      return fakeInstance
+    }))
+
+    mockFetchSequence([
+      new Response(JSON.stringify({ id: 'session-1', trackId: 'track-1', currentSentenceIndex: 0, status: 'InProgress', completedAt: null }), { status: 200 })
+    ])
+
+    render(<SentencePracticeView track={track} onCompleted={vi.fn()} onBack={vi.fn()} audioObjectUrl="blob:fake" audioError={null}/>)
+    await waitFor(() => expect(screen.getByRole('button', { name: /^check$/i })).not.toBeDisabled())
+
+    fireEvent.click(screen.getByRole('button', { name: /use microphone/i }))
+    fakeInstance!.onresult!({ results: [[{ transcript: 'hello' }]] })
+    await waitFor(() => expect(screen.getByRole('textbox')).toHaveValue('hello'))
+
+    // Delete the recognized word by hand while the mic is still recording — continuous mode
+    // never stops just because the textarea changed.
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: '' } })
+
+    // The underlying recognizer's raw results never shrink — real browsers keep every phrase
+    // recognized since .start(), "hello" included. The fix must not let that stale word come
+    // back just because more speech triggers another result event.
+    fakeInstance!.onresult!({ results: [[{ transcript: 'hello' }], [{ transcript: 'world' }]] })
+    await waitFor(() => expect(screen.getByRole('textbox')).toHaveValue('world'))
+
+    vi.unstubAllGlobals()
+  })
+
   it('advancing to the next sentence while recording starts a fresh transcript segment, not accumulating the old sentence\'s words', async () => {
     class FakeSpeechRecognition {
       continuous = false
