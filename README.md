@@ -11,9 +11,3 @@ Prerequisites: .NET 10 SDK, Node.js 20+, Docker Desktop, `dotnet-ef` (`dotnet to
 3. `cd frontend && npm install && npm run dev`
 
 Backend: http://localhost:5000/health · Frontend: http://localhost:3000
-
-## Design & spec
-
-- Spec: `docs/superpowers/specs/2026-08-28-english-dictation-app-design.md`
-- Implementation plans: `docs/superpowers/plans/`
-- UI mockups: `docs/design/mockups/`
