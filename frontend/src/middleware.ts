@@ -14,5 +14,9 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|api/auth).*)']
+  // Every /api/ route already authenticates itself and returns a proper JSON 401 when the
+  // session cookie is missing/expired — redirecting an API call here instead would make fetch()
+  // silently follow the redirect and hand the caller a 200 OK with the login page's HTML body
+  // (fetch() follows redirects transparently), instead of the 401 callers actually check for.
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|api/).*)']
 }

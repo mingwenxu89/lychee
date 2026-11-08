@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { Suspense, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { loginAccount } from '@/lib/apiClient'
 
@@ -59,7 +59,17 @@ function GoogleIcon() {
 }
 
 export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
+  )
+}
+
+function LoginForm() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const sessionExpired = searchParams.get('sessionExpired') === '1'
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -86,6 +96,12 @@ export default function LoginPage() {
           <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>Welcome back</h1>
           <span style={{ fontSize: 14, color: 'var(--ink-soft)', fontWeight: 600 }}>Log in to keep practicing</span>
         </div>
+
+        {sessionExpired && (
+          <p role="alert" style={{ background: 'var(--primary-soft)', color: 'var(--primary-dark)', fontWeight: 700, margin: 0, fontSize: 14, padding: '12px 16px', borderRadius: 14 }}>
+            Your session has expired. Please log in again.
+          </p>
+        )}
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
